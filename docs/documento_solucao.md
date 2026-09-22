@@ -62,6 +62,10 @@ O Fake Name Generator fornece uma identidade brasileira fictícia. São persisti
 
 No Fakturama, o desafio utiliza nome, sobrenome e CEP.
 
+**Referência — dados gerados no Fake Name Generator:**
+
+![Fake Name Generator com identidade brasileira fictícia](./images/fake-name-generator.png)
+
 ### Produtos
 
 Para cada item do Sauce Demo são coletados:
@@ -72,6 +76,14 @@ Para cada item do Sauce Demo são coletados:
 - preço.
 
 A quantidade não é fixa e é determinada a partir do DOM em cada execução.
+
+**Referência — login do Sauce Demo:**
+
+![Tela de login do Sauce Demo](./images/sauce-login.png)
+
+**Referência — catálogo utilizado na coleta dinâmica:**
+
+![Catálogo de produtos do Sauce Demo](./images/sauce-products.png)
 
 ## 4. Número do item do Sauce Demo
 
@@ -171,6 +183,18 @@ Os valores de preço permanecem normalizados com ponto no CSV. A conversão para
 ## 8. Estratégia de automação desktop
 
 O Fakturama é automatizado com reconhecimento de imagem e ações relativas às âncoras encontradas.
+
+**Referência — tela principal do Fakturama:**
+
+![Tela principal do Fakturama](./images/fakturama-home.png)
+
+**Referência — formulário de novo comprador:**
+
+![Formulário de novo contato no Fakturama](./images/fakturama-new-contact.png)
+
+**Referência — formulário de novo produto:**
+
+![Formulário de novo produto no Fakturama](./images/fakturama-new-product.png)
 
 Fluxo típico:
 
