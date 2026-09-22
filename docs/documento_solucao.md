@@ -1,595 +1,287 @@
 # Desafio RPA — Documento de Solução
 
+Este documento registra o **desenho da solução** elaborado para o desafio e as principais decisões consolidadas durante a implementação.
+
+O passo a passo de instalação e execução está no [`README.md`](../README.md).
+
 ## 1. Objetivo
 
-Implementar um fluxo RPA ponta a ponta que combine:
+Construir um fluxo RPA ponta a ponta que combine:
 
-- **Automação web** para coletar um comprador fictício brasileiro e o catálogo completo de produtos do Sauce Demo.
-- **Persistência em CSV** como ponte de dados entre as etapas web e desktop.
-- **Automação desktop** para cadastrar o comprador e os produtos coletados no Fakturama.
-- **Evidências de execução** por meio de arquivos CSV, capturas de tela e um único log de execução.
+- automação web para coletar um comprador fictício brasileiro;
+- automação web para autenticar no Sauce Demo e coletar o catálogo completo;
+- persistência em CSV como ponte entre web e desktop;
+- automação desktop para cadastrar comprador e produtos no Fakturama;
+- logging e evidências suficientes para validar a execução.
 
-A implementação deve permanecer simples, legível, reproduzível e fácil de manter.
+Cada execução processa um comprador e todos os produtos encontrados dinamicamente no catálogo.
 
----
-
-## 2. Escopo
-
-Cada execução processará:
-
-- **1 comprador fictício**
-- **Todos os produtos disponíveis no catálogo do Sauce Demo**
-- **1 cadastro de contato** no Fakturama
-- **1 cadastro de produto para cada item coletado do catálogo**
-
-O desafio não exige a criação de pedido, fatura ou relacionamento entre o comprador e os produtos.
-
----
-
-## 3. Fluxo do Processo
+## 2. Fluxo
 
 ```mermaid
 flowchart TD
-    A[Fake Name Generator] -->|Coletar dados do comprador| B[Modelo de Comprador]
-    B --> C[buyer.csv]
+    A[Fake Name Generator] --> B[Coleta e normalização do comprador]
+    C[Sauce Demo] --> D[Login e coleta dinâmica do catálogo]
 
-    D[Sauce Demo] -->|Login e coleta do catálogo| E[Modelos de Produto]
-    E --> F[products.csv]
+    B --> E[buyer.csv]
+    D --> F[products.csv]
 
-    C --> G[Automação Desktop no Fakturama]
+    E --> G[Leitura dos CSVs]
     F --> G
 
-    G --> H[Cadastrar comprador]
-    G --> I[Cadastrar todos os produtos]
+    G --> H[Fakturama]
+    H --> I[Cadastro do comprador]
+    H --> J[Cadastro dos produtos]
 
-    H --> J[Capturas de tela]
-    I --> J
+    I --> K[Capturas de tela]
+    J --> K
 
-    A --> K[Log de Execução]
-    D --> K
-    G --> K
+    A --> L[execution.log]
+    C --> L
+    H --> L
 ```
 
-Os arquivos CSV separam intencionalmente a etapa de coleta web da etapa de cadastro desktop.
+A leitura dos CSVs antes da etapa desktop é intencional: os arquivos persistidos são o contrato de dados entre as duas partes da automação.
 
----
+## 3. Dados coletados
 
-## 4. Aplicações
+### Comprador
 
-### 4.1 Fake Name Generator
+O Fake Name Generator fornece uma identidade brasileira fictícia. São persistidos:
 
-URL:
+- nome;
+- sobrenome;
+- rua;
+- número;
+- cidade;
+- estado;
+- CEP;
+- CPF;
+- telefone;
+- data de nascimento.
+
+No Fakturama, o desafio utiliza nome, sobrenome e CEP.
+
+### Produtos
+
+Para cada item do Sauce Demo são coletados:
+
+- número do item;
+- nome;
+- descrição;
+- preço.
+
+A quantidade não é fixa e é determinada a partir do DOM em cada execução.
+
+## 4. Número do item do Sauce Demo
+
+A interface não exibe visualmente um código de produto. Durante o spike foi identificado um identificador estável no DOM:
 
 ```text
-https://www.fakenamegenerator.com/gen-random-br-br.php
+item_<numero>_title_link
 ```
 
-Ao abrir essa URL, uma identidade brasileira fictícia já é gerada.
-
-Dados coletados e persistidos:
-
-- Nome
-- Sobrenome
-- Rua
-- Número
-- Cidade
-- Estado
-- CEP
-- CPF
-- Telefone
-- Data de nascimento
-
-Para o cadastro desktop atualmente implementado no Fakturama, são utilizados
-nome, sobrenome e CEP.
-
-Exemplo de tela:
-
-![Fake Name Generator](images/fake-name-generator.png)
-
----
-
-### 4.2 Sauce Demo — Login
-
-URL:
+A implementação extrai `<numero>` desse atributo. Exemplo:
 
 ```text
-https://www.saucedemo.com/
+item_4_title_link -> 4
 ```
 
-O login será automatizado usando Playwright e as credenciais de teste documentadas na própria página.
+Se o padrão esperado não for encontrado, a coleta falha explicitamente em vez de gerar um identificador artificial.
 
-Exemplo de tela:
-
-![Login do Sauce Demo](images/sauce-login.png)
-
----
-
-### 4.3 Sauce Demo — Catálogo de Produtos
-
-Após a autenticação, a automação coletará todos os produtos disponíveis na página de inventário.
-
-Para cada produto:
-
-- Número do item
-- Nome
-- Descrição
-- Preço
-
-Exemplo de tela:
-
-![Produtos do Sauce Demo](images/sauce-products.png)
-
-A implementação **não deve assumir uma quantidade fixa de produtos**. O número de itens será determinado dinamicamente a partir da página.
-
----
-
-### 4.4 Fakturama — Tela Inicial
-
-O Fakturama é a aplicação desktop utilizada para cadastrar os dados coletados.
-
-Exemplo de tela:
-
-![Tela Inicial do Fakturama](images/fakturama-home.png)
-
-A automação desktop usará reconhecimento de imagem para localizar âncoras visuais estáveis e navegação por teclado sempre que possível.
-
----
-
-### 4.5 Fakturama — Novo Contato
-
-O comprador coletado no Fake Name Generator será cadastrado como um novo contato.
-
-Campos relevantes para este desafio:
-
-- Nome
-- Sobrenome
-- CEP
-
-Exemplo de tela:
-
-![Novo Contato no Fakturama](images/fakturama-new-contact.png)
-
----
-
-### 4.6 Fakturama — Novo Produto
-
-Cada produto coletado no Sauce Demo será cadastrado como um novo produto.
-
-Campos relevantes:
-
-- Número do item
-- Nome
-- Descrição
-- Preço
-
-Exemplo de tela:
-
-![Novo Produto no Fakturama](images/fakturama-new-product.png)
-
----
-
-## 5. Stack Técnica Proposta
-
-### Automação web
-
-- Python 3
-- Playwright
-
-### Automação desktop
-
-- PyAutoGUI
-- OpenCV para suporte ao reconhecimento de imagem
-
-### Persistência e infraestrutura
-
-- `csv` do Python
-- `logging` do Python
-- `pathlib` do Python
-- `subprocess` do Python
-- `dataclasses`
-- `pytest`
-
-A solução evita frameworks adicionais, a menos que tragam valor claro para o desafio.
-
----
-
-## 6. Estrutura Geral do Projeto
+## 5. Arquitetura
 
 ```text
 rpa_challenge_fakturama/
-├── README.md
+├── main.py
+├── .env.example
 ├── requirements.txt
 ├── pytest.ini
-├── .gitignore
-├── main.py
 │
 ├── src/
+│   ├── config/
+│   │   └── settings.py
+│   ├── core/
+│   │   └── execution.py
 │   ├── web/
 │   │   ├── buyer_scraper.py
 │   │   └── sauce_demo.py
-│   ├── desktop/
-│   │   └── fakturama.py
-│   └── repositories/
-│       └── csv_repository.py
+│   ├── repositories/
+│   │   └── csv_repository.py
+│   └── desktop/
+│       └── fakturama.py
 │
 ├── resources/
 │   └── images/
 │       └── fakturama/
 │
-├── spikes/
-│   ├── README.md
-│   └── poc.py
-│
 ├── tests/
-│   ├── conftest.py
+│   ├── integration/
+│   ├── validation/
 │   ├── test_buyer_parsing.py
 │   ├── test_product_parsing.py
 │   └── test_csv_repository.py
 │
-├── docs/
-│   ├── desafio_tecnico_rpa_candidato.pdf
-│   ├── documento_solucao.md
-│   └── images/
-│
-└── results/
-    └── .gitkeep
+├── results/
+├── spikes/
+└── docs/
 ```
 
-A estrutura poderá ser simplificada durante a implementação caso um desenho menor se mostre suficiente.
+Responsabilidades:
 
----
+- `main.py`: orquestra o fluxo.
+- `src/config`: configuração de runtime.
+- `src/web`: scraping e normalização.
+- `src/repositories`: persistência e leitura dos CSVs.
+- `src/desktop`: interação com Fakturama.
+- `src/core`: diretórios de execução e logging.
+- `resources`: imagens usadas como âncoras visuais.
+- `spikes`: POC histórica, sem dependência do código de produção.
 
-## 7. Contratos de Dados
+## 6. Configuração
 
-### 7.1 CSV do Comprador
+Valores que podem variar entre máquina/ambiente ficam em variáveis de ambiente e são lidos por:
 
-Exemplo:
+```text
+src/config/settings.py
+```
+
+O `.env` é opcional e local. O repositório fornece `.env.example` com os valores esperados.
+
+Seletores web, nomes de assets, headers CSV e demais regras internas permanecem nos respectivos módulos, evitando transformar a configuração em um repositório de constantes sem relação com ambiente.
+
+## 7. Persistência
+
+### `buyer.csv`
 
 ```csv
 first_name,last_name,street,number,city,state,zip_code,cpf,phone,birth_date
 Miguel,Pereira Carvalho,Rua Amadeu Natal,1199,Curitiba,PR,82650-440,160.419.191-01,(41) 6375-6640,1941-07-19
 ```
 
-Os dados adicionais do comprador são persistidos para tornar o handoff entre
-as etapas web e desktop mais completo, mesmo que apenas um subconjunto seja
-necessário no cadastro atual do Fakturama.
-
-### 7.2 CSV de Produtos
-
-Exemplo:
+### `products.csv`
 
 ```csv
 item_number,name,description,price
-1,Sauce Labs Backpack,"carry.allTheThings() with the sleek, streamlined Sly Pack...",29.99
+4,Sauce Labs Backpack,Descrição do produto,29.99
 ```
 
-A automação persistirá todos os produtos encontrados na página.
+Os valores de preço permanecem normalizados com ponto no CSV. A conversão para vírgula ocorre apenas ao preencher o Fakturama.
 
----
+## 8. Estratégia de automação desktop
 
-## 8. Decisão sobre o Número do Item
+O Fakturama é automatizado com reconhecimento de imagem e ações relativas às âncoras encontradas.
 
-O desafio exige um **número do item**, porém a interface do Sauce Demo não exibe visualmente um número de produto.
-
-Durante o spike técnico, o DOM será inspecionado em busca de um identificador estável associado a cada produto.
-
-Ordem de decisão:
-
-1. Utilizar um identificador estável já disponível no DOM, caso exista.
-2. Caso contrário, gerar um número sequencial determinístico com base na ordem dos produtos retornados pela página.
-3. Documentar a estratégia adotada no README.
-
-Nenhum identificador aleatório será gerado.
-
----
-
-## 9. Estratégia de Automação Desktop
-
-O fluxo desktop priorizará:
+Fluxo típico:
 
 ```text
-Reconhecimento de imagem
+aguardar âncora
     ↓
-Localizar uma âncora visual estável
+calcular posição do campo
     ↓
-Clicar/focar a tela
+clicar
     ↓
-Navegar usando atalhos de teclado / TAB
+validar visualmente o foco
     ↓
-Preencher os valores necessários
+preencher
     ↓
-Salvar
+salvar
 ```
 
-O reconhecimento de imagem será usado somente onde agregar valor.
+Para evitar escrita em campos incorretos, os inputs destacados pelo Fakturama são validados pela cor de foco antes do preenchimento. A validação aceita tolerância de RGB e pode repetir o clique antes de falhar.
 
-A automação deve evitar localizar cada campo individualmente por imagem quando a navegação por teclado for suficiente.
+As esperas utilizam polling por imagem sempre que possível. Pequenos `sleep` permanecem apenas em pontos em que a interface precisa concluir uma transição curta ou preparar a evidência.
 
-Exemplo de abstração:
+O preenchimento usa `pyperclip` + `Ctrl+V` pela velocidade, com o trade-off conhecido de sobrescrever o clipboard do usuário.
 
-```python
-desktop.find_and_click("new_contact.png")
-desktop.write(buyer.first_name)
-desktop.press("tab")
-desktop.write(buyer.last_name)
-```
+## 9. Logs e evidências
 
-Isso mantém o fluxo do Fakturama legível e reduz chamadas duplicadas ao PyAutoGUI.
-
----
-
-## 10. Sincronização
-
-Atrasos fixos não devem ser a principal estratégia de sincronização.
-
-Em vez de depender de:
-
-```python
-time.sleep(5)
-```
-
-a camada desktop deve aguardar um estado visual esperado:
-
-```python
-wait_for_image(
-    image_path="new_product.png",
-    timeout=10,
-    confidence=0.85,
-)
-```
-
-Pequenos intervalos internos de polling ainda podem ser utilizados durante a espera pelo estado esperado.
-
----
-
-## 11. Estratégia de Retentativas
-
-As retentativas serão aplicadas somente quando a operação puder ser repetida com segurança.
-
-### Exemplos seguros para retentativa
-
-- Abrir uma URL
-- Aguardar um seletor web
-- Aguardar uma imagem no desktop
-- Localizar uma âncora visual
-- Abrir uma tela que não persista dados
-
-### Operações que exigem cuidado
-
-- Salvar um contato
-- Salvar um produto
-
-Uma retentativa cega após uma operação de persistência pode criar registros duplicados.
-
-Para operações de escrita, a automação deve primeiro determinar se a operação foi concluída com sucesso. Caso o estado final não possa ser identificado com segurança, o comportamento mais seguro será:
-
-1. Capturar evidência
-2. Registrar o erro no log
-3. Interromper a execução
-
-Configuração sugerida:
-
-```python
-MAX_RETRIES = 3
-DEFAULT_TIMEOUT = 10
-IMAGE_CONFIDENCE = 0.85
-```
-
-As retentativas devem tratar falhas transitórias, e não ocultar defeitos.
-
----
-
-## 12. Estratégia de Logs
-
-Será gerado **um único arquivo de log por execução completa do RPA**.
-
-Exemplo:
-
-```text
-2026-09-21 21:30:00 | INFO  | Execução iniciada
-2026-09-21 21:30:03 | INFO  | Comprador coletado: Alice Correia Santos
-2026-09-21 21:30:03 | INFO  | Comprador persistido em buyer.csv
-
-2026-09-21 21:30:05 | INFO  | Login no SauceDemo iniciado
-2026-09-21 21:30:07 | INFO  | Login no SauceDemo realizado com sucesso
-2026-09-21 21:30:08 | INFO  | Produtos encontrados: 6
-2026-09-21 21:30:08 | INFO  | Produto [1/6] coletado: Sauce Labs Backpack
-
-2026-09-21 21:31:00 | INFO  | Cadastro do cliente no Fakturama iniciado
-2026-09-21 21:31:08 | INFO  | Cliente cadastrado com sucesso
-
-2026-09-21 21:31:12 | INFO  | Cadastro do produto [1/6] iniciado
-2026-09-21 21:31:19 | INFO  | Produto [1/6] cadastrado com sucesso
-
-2026-09-21 21:33:42 | INFO  | Execução finalizada com sucesso
-2026-09-21 21:33:42 | INFO  | Compradores cadastrados: 1/1
-2026-09-21 21:33:42 | INFO  | Produtos cadastrados: 6/6
-```
-
-A implementação final não deve assumir que o catálogo sempre contém seis produtos; esse número é apenas ilustrativo.
-
----
-
-## 13. Resultados e Evidências
-
-Cada execução deve gerar sua própria pasta de resultados.
-
-Exemplo:
+Cada execução recebe uma pasta própria:
 
 ```text
 results/
-└── 2026-09-21_213000/
+└── YYYY-MM-DD_HHMMSS/
     ├── buyer.csv
     ├── products.csv
     ├── execution.log
     └── screenshots/
         ├── customer_registered.png
-        └── products_registered.png
+        ├── products_registered.png
+        └── error.png
 ```
 
-Isso mantém agrupadas todas as evidências de uma mesma execução.
+O log registra:
 
-Evidências obrigatórias:
+- início da execução e ambiente;
+- comprador coletado;
+- quantidade e identificação dos produtos;
+- persistência e recarga dos CSVs;
+- cadastro do comprador;
+- cadastro produto a produto;
+- caminhos das evidências;
+- resumo final;
+- exceção e traceback quando houver falha.
 
-- CSV do comprador
-- CSV do catálogo de produtos
-- Captura de tela mostrando o comprador cadastrado
-- Captura de tela mostrando a lista completa de produtos cadastrados
-- Log de execução
-
----
-
-## 14. Tratamento de Erros
-
-Os erros devem ser registrados com informações suficientes para identificar:
-
-- Em qual etapa ocorreu a falha
-- Qual item estava sendo processado
-- Qual tentativa estava em execução
-- A exceção original
-- Se a execução pode continuar com segurança
-
-Quando relevante, uma captura de tela deve ser gerada antes da interrupção.
-
-Exemplo:
+Existe uma execução de referência versionada em:
 
 ```text
-ERROR | Falha ao cadastrar produto [3/6]
-ERROR | Produto atual: Sauce Labs Bolt T-Shirt
-ERROR | Imagem esperada não encontrada: save_confirmation.png
-ERROR | Screenshot salvo em: screenshots/error_product_3.png
+results/2026-09-21_234913/
 ```
 
----
+As demais execuções são artefatos de runtime e ficam ignoradas pelo Git.
 
-## 15. Testes
+## 10. Tratamento de falhas
 
-Os testes priorizarão primeiro a lógica determinística.
+O fluxo evita retentativas cegas em operações que podem gerar duplicidade.
 
-### Testes unitários
+Quando uma falha impede continuar com segurança:
 
-Exemplos:
+1. a exceção é registrada;
+2. uma screenshot de erro é tentada quando o Fakturama já está aberto;
+3. o aplicativo é fechado no `finally`;
+4. o resumo final registra a quantidade efetivamente cadastrada;
+5. a exceção é propagada para que a execução termine como falha.
 
-- Interpretar dados do comprador
-- Interpretar preço do produto
-- Criar modelos de produto
-- Gravar arquivos CSV
-- Ler arquivos CSV
-- Validar campos obrigatórios
-- Validar quantidade de produtos
+Falha ao fechar o Fakturama também invalida o status de sucesso.
 
-### Testes de integração / smoke
+## 11. Testes
 
-Exemplos:
+A estratégia separa:
 
-- Scraping do Fake Name Generator
-- Login e scraping do Sauce Demo
-- Handoff por CSV
-- Interação desktop básica
+- **unitários**: parsing, normalização e persistência CSV;
+- **integração**: Playwright + parsing + CSV com páginas controladas;
+- **validação**: orquestração completa com dependências externas substituídas, incluindo sucesso, falha de cadastro e falha no fechamento.
 
-Chamadas de baixo nível como `pyautogui.click()` não precisam de testes unitários artificiais.
+A interface real do Fakturama não é executada automaticamente pela suíte para evitar testes frágeis dependentes de resolução, foco e estado do desktop. O fluxo desktop real é validado pela execução funcional e pelas evidências geradas.
 
----
+## 12. Premissas e decisões de escopo
 
-## 16. Configuração
+Premissas principais:
 
-A configuração deve permanecer pequena e explícita.
+- execução desktop em Windows;
+- Fakturama 2.2.0 instalado localmente;
+- acesso aos dois sites utilizados;
+- renderização do Fakturama compatível com as imagens de referência;
+- ausência de interação manual com mouse/teclado durante a etapa desktop.
 
-Exemplo:
+Ficam fora do escopo:
 
-```python
-FAKE_NAME_URL = "https://www.fakenamegenerator.com/gen-random-br-br.php"
+- criação de pedido ou fatura;
+- associação do comprador a uma compra;
+- banco de dados;
+- OCR;
+- execução distribuída;
+- múltiplos compradores em uma mesma execução.
 
-SAUCE_URL = "https://www.saucedemo.com/"
-SAUCE_USERNAME = "standard_user"
-SAUCE_PASSWORD = "secret_sauce"
+## 13. Critérios de sucesso
 
-FAKTURAMA_PATH = "..."
+Uma execução é considerada bem-sucedida quando:
 
-MAX_RETRIES = 3
-DEFAULT_TIMEOUT = 10
-IMAGE_CONFIDENCE = 0.85
-```
-
-O desafio exige um comprador fictício por execução, portanto a quantidade de compradores não será configurável, a menos que um requisito posterior justifique isso.
-
----
-
-## 17. Premissas
-
-A implementação inicial considera:
-
-- Ambiente Windows
-- Fakturama instalado localmente
-- Fakturama iniciado a partir de uma versão/configuração conhecida
-- Escala de exibição e resolução compatíveis com as imagens de referência capturadas
-- Acesso à internet disponível
-- Sauce Demo e Fake Name Generator acessíveis
-- O avaliador poderá configurar o caminho do executável do Fakturama, se necessário
-
-O README final documentará o ambiente utilizado durante desenvolvimento e validação.
-
----
-
-## 18. Fora do Escopo
-
-Os seguintes itens ficam intencionalmente fora do escopo do desafio, a menos que posteriormente sejam exigidos:
-
-- Criar faturas
-- Criar pedidos
-- Associar o comprador a uma compra
-- Cadastrar múltiplos compradores em uma mesma execução
-- Orquestração externa
-- Integração com banco de dados
-- OCR
-- Frameworks complexos de interface
-- Execução distribuída
-
----
-
-## 19. Critérios de Sucesso
-
-A execução será considerada bem-sucedida quando:
-
-1. Um comprador fictício for coletado.
-2. Todos os produtos disponíveis no Sauce Demo forem coletados.
-3. Os dados do comprador forem persistidos em CSV.
-4. Os dados dos produtos forem persistidos em CSV.
-5. O comprador for cadastrado no Fakturama.
-6. Todos os produtos coletados forem cadastrados no Fakturama.
-7. Os dados dos CSVs e os registros do Fakturama coincidirem.
-8. As capturas de tela obrigatórias forem geradas.
-9. O log de execução registrar o processo item a item.
-10. Um segundo desenvolvedor conseguir clonar o repositório, seguir o README, configurar o ambiente e executar a automação sem precisar conhecer a implementação.
-
----
-
-## 20. Plano Inicial de Implementação
-
-Evolução planejada do repositório:
-
-```text
-docs: add challenge requirements and initial solution design
-
-spike: validate web and desktop automation feasibility (poc)
-
-test: add unit tests for parsing and csv persistence
-
-feat: implement fake customer scraping
-
-feat: implement SauceDemo product scraping
-
-feat: add csv persistence layer
-
-feat: implement Fakturama customer registration
-
-feat: implement Fakturama product registration
-
-feat: add execution logging and evidence capture
-
-test: add integration and validation scenarios
-
-docs: add setup and execution instructions
-```
-
-A sequência poderá mudar caso o spike técnico revele alguma restrição na automação desktop.
+1. o comprador é coletado e persistido;
+2. todos os produtos disponíveis são coletados e persistidos;
+3. os CSVs são recarregados para a etapa desktop;
+4. o comprador é cadastrado no Fakturama;
+5. todos os produtos são cadastrados;
+6. as evidências visuais são geradas;
+7. o log registra o fluxo e o resumo final;
+8. os dados persistidos correspondem aos utilizados no cadastro desktop.
