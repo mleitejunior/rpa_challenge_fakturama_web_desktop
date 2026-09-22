@@ -6,3 +6,6 @@ pyautogui==0.9.54
 opencv-python==5.0.0.93
 pillow==12.3.0
 pyperclip==1.11.0
+
+# Testes
+pytest==9.1.1
