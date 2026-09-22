@@ -50,7 +50,7 @@ Baixe a versão utilizada como referência no projeto:
 
 [Fakturama 2.2.0 — Windows x64 com JRE](https://files.fakturama.info/release/v2.2.0/Installer_Fakturama_windows-x64_2.2.0_with_jre.msi)
 
-*IMPORTANTE:* Durante a instalação, utilize o idioma **Inglês (Englisch)**, na primeira execução quando pedir para selecionar uma pasta de trabalho (Workplace folder), você pode criar uma pasta para isto ou selecionar alguma como seu Documentos.
+Durante a instalação, utilize o idioma **Inglês (Englisch)**.
 
 O projeto espera, por padrão, o executável em:
 
@@ -101,7 +101,7 @@ Há duas opções.
 
 **Opção A — Download pelo GitHub**
 
-Na página do repositório (esta mesma página, o botão verdinho CODE lá emcima):
+Na página do repositório:
 
 ```text
 Code → Download ZIP
@@ -172,6 +172,8 @@ O projeto utiliza dois níveis simples de configuração:
 - `src/config/settings.py`: responsável por carregar o `.env`, aplicar valores padrão e converter os tipos utilizados pelo código.
 
 O `.env` é criado a partir de `.env.example` e **não deve ser versionado no Git**.
+
+Durante o primeiro cadastro de preço, o RPA identifica automaticamente se o Fakturama daquela máquina aceita melhor `,` ou `.` como separador decimal. A preferência validada é salva em `.runtime_state.json`, também ignorado pelo Git, e passa a ser tentada primeiro nos próximos produtos e nas próximas execuções daquela máquina. Se deixar de funcionar, o outro separador é testado e a preferência é atualizada automaticamente.
 
 Exemplo das principais configurações:
 

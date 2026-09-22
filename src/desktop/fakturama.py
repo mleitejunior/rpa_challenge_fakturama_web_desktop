@@ -1,8 +1,10 @@
 import ctypes
+import json
 import logging
 import os
 import subprocess
 import time
+from decimal import Decimal, InvalidOperation
 from pathlib import Path, PureWindowsPath
 
 import pyautogui
@@ -16,12 +18,12 @@ from src.config.settings import (
     FAKTURAMA_TERMINATION_TIMEOUT_SECONDS,
     FIELD_CLICK_OFFSET_X,
     FOCUS_AFTER_CLICK_WAIT_SECONDS,
-    FOCUS_CLICK_MAX_ATTEMPTS,
     FOCUS_COLOR_TOLERANCE,
     FOCUS_MIN_MATCH_RATIO,
-    IMAGE_CONFIDENCE,
+    ICON_IMAGE_CONFIDENCE,
     IMAGE_POLL_INTERVAL_SECONDS,
     IMAGE_TIMEOUT_SECONDS,
+    TEXT_IMAGE_CONFIDENCE,
 )
 
 LOGGER = logging.getLogger("rpa.fakturama")
@@ -29,29 +31,93 @@ LOGGER = logging.getLogger("rpa.fakturama")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FAKTURAMA_ASSETS = PROJECT_ROOT / "resources" / "images" / "fakturama"
+RUNTIME_STATE_FILE = PROJECT_ROOT / ".runtime_state.json"
+PRICE_SEPARATOR_STATE_KEY = "price_decimal_separator"
 
 # Imagens usadas como âncoras na automação desktop.
-PRODUCT_IMAGE = FAKTURAMA_ASSETS / "product.png"
-CONTACT_IMAGE = FAKTURAMA_ASSETS / "contact.png"
-NEW_DEBTOR_IMAGE = FAKTURAMA_ASSETS / "new_debtor.png"
-FIRST_NAME_LAST_NAME_IMAGE = FAKTURAMA_ASSETS / "first_name_last_name.png"
-ZIP_CITY_IMAGE = FAKTURAMA_ASSETS / "zip_city.png"
-SAVE_IMAGE = FAKTURAMA_ASSETS / "save.png"
-ITEM_NUMBER_IMAGE = FAKTURAMA_ASSETS / "item_number.png"
-NAME_IMAGE = FAKTURAMA_ASSETS / "name.png"
-DESCRIPTION_IMAGE = FAKTURAMA_ASSETS / "description.png"
-PRICE_GROSS_IMAGE = FAKTURAMA_ASSETS / "price_gross.png"
-STOCK_IMAGE = FAKTURAMA_ASSETS / "stock.png"
-DEBTORS_LIST_IMAGE = FAKTURAMA_ASSETS / "debtors_list.png"
-PRODUCTS_LIST_IMAGE = FAKTURAMA_ASSETS / "products_list.png"
+PRODUCT_IMAGE = FAKTURAMA_ASSETS / "product_icon.png"
+CONTACT_IMAGE = FAKTURAMA_ASSETS / "contact_icon.png"
+NEW_DEBTOR_IMAGES = (
+    FAKTURAMA_ASSETS / "new_debtor_variant_1.png",
+    FAKTURAMA_ASSETS / "new_debtor_variant_2.png",
+)
+FIRST_NAME_LAST_NAME_IMAGES = (
+    FAKTURAMA_ASSETS / "first_name_last_name_variant_1.png",
+    FAKTURAMA_ASSETS / "first_name_last_name_variant_2.png",
+)
+ZIP_CITY_IMAGES = (
+    FAKTURAMA_ASSETS / "zip_city_variant_1.png",
+    FAKTURAMA_ASSETS / "zip_city_variant_2.png",
+)
+SAVE_IMAGE = FAKTURAMA_ASSETS / "save_icon.png"
+ITEM_NUMBER_IMAGES = (
+    FAKTURAMA_ASSETS / "item_number_variant_1.png",
+    FAKTURAMA_ASSETS / "item_number_variant_2.png",
+)
+NAME_IMAGES = (
+    FAKTURAMA_ASSETS / "name_variant_1.png",
+    FAKTURAMA_ASSETS / "name_variant_2.png",
+)
+DESCRIPTION_IMAGES = (
+    FAKTURAMA_ASSETS / "description_variant_1.png",
+    FAKTURAMA_ASSETS / "description_variant_2.png",
+)
+PRICE_GROSS_IMAGES = (
+    FAKTURAMA_ASSETS / "price_gross_variant_1.png",
+    FAKTURAMA_ASSETS / "price_gross_variant_2.png",
+)
+STOCK_IMAGES = (
+    FAKTURAMA_ASSETS / "stock_variant_1.png",
+    FAKTURAMA_ASSETS / "stock_variant_2.png",
+)
+STREET_IMAGES = (
+    FAKTURAMA_ASSETS / "street_variant_1.png",
+    FAKTURAMA_ASSETS / "street_variant_2.png",
+)
+ADDRESS_SPECIFICATION_IMAGES = (
+    FAKTURAMA_ASSETS / "address_specification_variant_1.png",
+    FAKTURAMA_ASSETS / "address_specification_variant_2.png",
+)
+DEBTORS_LIST_IMAGE = FAKTURAMA_ASSETS / "debtors_list_icon.png"
+PRODUCTS_LIST_IMAGE = FAKTURAMA_ASSETS / "products_list_icon.png"
+
+# Tipos de âncora visual.
+# Ícones são mais estáveis entre máquinas; labels textuais recebem tolerância
+# própria porque a rasterização de fonte pode variar entre Windows/Java/GPU.
+ICON_ANCHORS = {
+    PRODUCT_IMAGE,
+    CONTACT_IMAGE,
+    SAVE_IMAGE,
+    DEBTORS_LIST_IMAGE,
+    PRODUCTS_LIST_IMAGE,
+}
+SIDEBAR_ICON_ANCHORS = {
+    DEBTORS_LIST_IMAGE,
+    PRODUCTS_LIST_IMAGE,
+}
+TOOLBAR_ICON_ANCHORS = {
+    PRODUCT_IMAGE,
+    CONTACT_IMAGE,
+}
 
 # Regras internas da automação desktop.
 DEFAULT_PRODUCT_STOCK = "1"
+NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS = 0.10
+PRICE_DECIMAL_SEPARATORS = (",", ".")
+
+# Compatibilidade do formulário de contato entre máquinas.
+SHORT_ANCHOR_TIMEOUT_SECONDS = 2.0
+CONTACT_SCROLL_ATTEMPTS = 4
+CONTACT_SCROLL_AMOUNT = -4
+CONTACT_SCROLL_WAIT_SECONDS = 0.25
+ZIP_ROW_OFFSET_FROM_STREET = 3
 
 # Controle da janela do Fakturama no Windows.
 WINDOW_FOCUS_MAX_ATTEMPTS = 5
 WINDOW_FOCUS_RETRY_SECONDS = 0.25
+WINDOW_MAXIMIZE_WAIT_SECONDS = 0.5
 SW_RESTORE = 9
+SW_MAXIMIZE = 3
 GW_OWNER = 4
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 PROCESS_IMAGE_BUFFER_SIZE = 32768
@@ -59,39 +125,147 @@ PROCESS_IMAGE_BUFFER_SIZE = 32768
 _FAKTURAMA_WINDOW_HANDLE = None
 _USER32 = None
 _KERNEL32 = None
+_PREFERRED_PRICE_DECIMAL_SEPARATOR = None
+_PRICE_SEPARATOR_STATE_LOADED = False
 
 # Validação visual de foco dos campos.
 # O Fakturama destaca o input ativo com este tom de amarelo.
 FOCUSED_FIELD_COLOR = (250, 240, 162)
 FOCUS_SAMPLE_WIDTH = 12
 FOCUS_SAMPLE_HEIGHT = 8
+FOCUS_RETRY_OFFSET_X = 5
+FOCUS_RETRY_COUNT = 5
+
+# Confirmações de fechamento do Fakturama.
+FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS = 0.5
 
 # O copy/paste com pyperclip foi mantido por ser significativamente mais rápido
 # que a digitação caractere a caractere. Como trade-off, o conteúdo atual do
 # clipboard do usuário é sobrescrito durante a execução.
 
 
-def wait_for_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
-    """Aguarda uma imagem aparecer na tela e retorna sua região."""
+def wait_for_image(
+    image_path,
+    timeout=IMAGE_TIMEOUT_SECONDS,
+    confidence=None,
+):
+    """Aguarda uma das variantes da âncora dentro da janela do Fakturama."""
+    candidates = _normalize_anchor_candidates(image_path)
     deadline = time.monotonic() + timeout
 
-    while time.monotonic() < deadline:
-        try:
-            location = pyautogui.locateOnScreen(
-                str(image_path),
-                confidence=IMAGE_CONFIDENCE,
-            )
-        except pyautogui.ImageNotFoundException:
-            location = None
+    if confidence is None:
+        confidence = _get_anchor_confidence(candidates[0])
 
-        if location:
-            return location
+    while time.monotonic() < deadline:
+        ensure_fakturama_foreground()
+
+        for path in candidates:
+            region = _get_anchor_search_region(path)
+            grayscale = path not in ICON_ANCHORS
+
+            try:
+                location = pyautogui.locateOnScreen(
+                    str(path),
+                    confidence=confidence,
+                    region=region,
+                    grayscale=grayscale,
+                )
+            except pyautogui.ImageNotFoundException:
+                location = None
+
+            if location:
+                if len(candidates) > 1:
+                    LOGGER.info(
+                        "Âncora %s localizada com a variante %s",
+                        candidates[0].stem,
+                        path.name,
+                    )
+                return location
 
         time.sleep(IMAGE_POLL_INTERVAL_SECONDS)
 
+    candidate_names = ", ".join(path.name for path in candidates)
     raise TimeoutError(
-        f"Imagem não encontrada em até {timeout}s: {image_path.name}"
+        "Nenhuma variante da imagem foi encontrada em até "
+        f"{timeout}s: {candidate_names} "
+        f"(confidence={confidence:.2f})"
     )
+
+
+def _normalize_anchor_candidates(image_path):
+    """Normaliza uma âncora única ou uma coleção de variantes."""
+    if isinstance(image_path, (tuple, list, set)):
+        candidates = tuple(Path(path) for path in image_path)
+    else:
+        candidates = (Path(image_path),)
+
+    if not candidates:
+        raise ValueError("Nenhuma imagem foi informada para a âncora.")
+
+    return candidates
+
+def _get_anchor_confidence(image_path):
+    """Retorna a confiança adequada ao tipo de âncora visual."""
+    if image_path in ICON_ANCHORS:
+        return ICON_IMAGE_CONFIDENCE
+
+    return TEXT_IMAGE_CONFIDENCE
+
+
+def _get_anchor_search_region(image_path):
+    """Limita a busca à área relevante da janela real do Fakturama."""
+    left, top, width, height = _get_fakturama_window_region()
+
+    if image_path in TOOLBAR_ICON_ANCHORS:
+        toolbar_height = max(120, int(height * 0.22))
+        return (left, top, width, min(toolbar_height, height))
+
+    if image_path in SIDEBAR_ICON_ANCHORS:
+        sidebar_width = max(220, int(width * 0.28))
+        return (left, top, min(sidebar_width, width), height)
+
+    # Labels textuais podem começar muito próximos à borda esquerda do conteúdo
+    # dependendo do layout/escala da máquina. Como a busca já está limitada à
+    # janela correta do Fakturama, usamos a janela inteira para esses casos.
+    return (left, top, width, height)
+
+
+def _get_fakturama_window_region():
+    """Obtém a região visível da janela do Fakturama em coordenadas de tela."""
+    global _FAKTURAMA_WINDOW_HANDLE
+
+    user32, _, wintypes = _get_win32_apis()
+
+    if (
+        _FAKTURAMA_WINDOW_HANDLE is None
+        or not user32.IsWindow(_FAKTURAMA_WINDOW_HANDLE)
+    ):
+        _FAKTURAMA_WINDOW_HANDLE = _wait_for_fakturama_window()
+
+    rect = wintypes.RECT()
+
+    if not user32.GetWindowRect(
+        _FAKTURAMA_WINDOW_HANDLE,
+        ctypes.byref(rect),
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    screen_width, screen_height = pyautogui.size()
+
+    left = max(0, rect.left)
+    top = max(0, rect.top)
+    right = min(screen_width, rect.right)
+    bottom = min(screen_height, rect.bottom)
+
+    width = right - left
+    height = bottom - top
+
+    if width <= 0 or height <= 0:
+        raise RuntimeError(
+            "A janela do Fakturama não possui uma região visível válida."
+        )
+
+    return (left, top, width, height)
 
 
 def click_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
@@ -102,23 +276,34 @@ def click_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
     return location
 
 
-def click_right_of_image(image_path, offset_x=FIELD_CLICK_OFFSET_X):
+def click_right_of_image(
+    image_path,
+    offset_x=FIELD_CLICK_OFFSET_X,
+    timeout=IMAGE_TIMEOUT_SECONDS,
+    confidence=None,
+):
     """Clica à direita da âncora e valida se o campo recebeu foco."""
-    location = wait_for_image(image_path)
+    candidates = _normalize_anchor_candidates(image_path)
+    location = wait_for_image(
+        candidates,
+        timeout=timeout,
+        confidence=confidence,
+    )
 
     x = location.left + location.width + offset_x
     y = location.top + (location.height // 2)
 
-    _click_and_validate_focus(x, y, image_path.name)
+    _click_and_validate_focus(x, y, candidates[0].stem)
     return location
 
 
 def click_field_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
-    """Clica no centro de uma imagem de campo e valida o foco."""
-    location = wait_for_image(image_path, timeout=timeout)
+    """Clica no centro de uma das variantes de campo e valida o foco."""
+    candidates = _normalize_anchor_candidates(image_path)
+    location = wait_for_image(candidates, timeout=timeout)
     center = pyautogui.center(location)
 
-    _click_and_validate_focus(center.x, center.y, image_path.name)
+    _click_and_validate_focus(center.x, center.y, candidates[0].stem)
     return location
 
 
@@ -126,6 +311,248 @@ def paste_text(value):
     """Copia o valor para o clipboard e cola no campo em foco."""
     pyperclip.copy(str(value))
     pyautogui.hotkey("ctrl", "v")
+
+
+def paste_and_validate_numeric(value, field_name, input_candidates=None):
+    """Substitui e valida um valor numérico lendo o conteúdo do próprio campo."""
+    expected_value = _parse_numeric_value(value)
+
+    if input_candidates is None:
+        input_candidates = _build_numeric_input_candidates(value)
+
+    candidates = tuple(dict.fromkeys(str(item) for item in input_candidates))
+    last_read_value = None
+
+    for candidate in candidates:
+        # Os campos numéricos já possuem valor padrão. Selecionar e apagar antes
+        # de colar impede que o novo conteúdo seja concatenado ao valor existente.
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("backspace")
+        pyperclip.copy(candidate)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS)
+
+        # O Fakturama aplica a formatação definitiva quando o campo perde foco.
+        # Tab + Shift+Tab força esse commit e retorna ao mesmo input antes da leitura.
+        pyautogui.press("tab")
+        time.sleep(NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS)
+        pyautogui.hotkey("shift", "tab")
+        time.sleep(NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS)
+
+        # Lê o valor já formatado pelo próprio Fakturama.
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS)
+        last_read_value = pyperclip.paste().strip()
+
+        try:
+            actual_value = _parse_numeric_value(last_read_value)
+        except ValueError:
+            LOGGER.warning(
+                "Campo %s retornou valor não numérico após inserir %s: %r",
+                field_name,
+                candidate,
+                last_read_value,
+            )
+            continue
+
+        if actual_value == expected_value:
+            LOGGER.info(
+                "Campo %s validado: inserido=%s | lido=%s",
+                field_name,
+                candidate,
+                last_read_value,
+            )
+            return last_read_value, candidate
+
+        LOGGER.warning(
+            "Validação do campo %s falhou: esperado=%s | inserido=%s | lido=%s",
+            field_name,
+            expected_value,
+            candidate,
+            last_read_value,
+        )
+
+    raise RuntimeError(
+        f"Não foi possível registrar corretamente o valor numérico do campo "
+        f"{field_name}. Esperado: {expected_value}. "
+        f"Último valor lido: {last_read_value!r}."
+    )
+
+
+def _build_numeric_input_candidates(value):
+    """Gera representações numéricas compatíveis com diferentes localidades."""
+    numeric_value = _parse_numeric_value(value)
+    canonical = format(numeric_value, "f")
+
+    if numeric_value == numeric_value.to_integral():
+        integer_value = str(int(numeric_value))
+        return (
+            integer_value,
+            f"{integer_value},00",
+            f"{integer_value}.00",
+        )
+
+    return (
+        canonical.replace(".", ","),
+        canonical,
+    )
+
+
+def _build_price_input_candidates(value):
+    """Gera candidatos priorizando o separador aprendido nesta máquina."""
+    numeric_value = _parse_numeric_value(value)
+    canonical = format(numeric_value, "f")
+    preferred_separator = _get_preferred_price_decimal_separator()
+
+    separators = list(PRICE_DECIMAL_SEPARATORS)
+
+    if preferred_separator in separators:
+        separators.remove(preferred_separator)
+        separators.insert(0, preferred_separator)
+
+    return tuple(
+        canonical.replace(".", separator)
+        for separator in separators
+    )
+
+
+def _remember_price_decimal_separator(candidate):
+    """Persiste o separador decimal que foi validado pelo Fakturama."""
+    separator = _extract_decimal_separator(candidate)
+
+    if separator not in PRICE_DECIMAL_SEPARATORS:
+        return
+
+    current = _get_preferred_price_decimal_separator()
+
+    if current == separator:
+        return
+
+    _save_preferred_price_decimal_separator(separator)
+    LOGGER.info(
+        "Separador decimal preferido do Fakturama atualizado para %r",
+        separator,
+    )
+
+
+def _extract_decimal_separator(value):
+    """Extrai o último separador decimal explícito de um valor de entrada."""
+    text = str(value)
+    dot_index = text.rfind(".")
+    comma_index = text.rfind(",")
+
+    if dot_index < 0 and comma_index < 0:
+        return None
+
+    return "." if dot_index > comma_index else ","
+
+
+def _get_preferred_price_decimal_separator():
+    """Carrega uma vez a preferência local de separador decimal."""
+    global _PREFERRED_PRICE_DECIMAL_SEPARATOR
+    global _PRICE_SEPARATOR_STATE_LOADED
+
+    if _PRICE_SEPARATOR_STATE_LOADED:
+        return _PREFERRED_PRICE_DECIMAL_SEPARATOR
+
+    _PRICE_SEPARATOR_STATE_LOADED = True
+
+    if not RUNTIME_STATE_FILE.exists():
+        return None
+
+    try:
+        state = json.loads(RUNTIME_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        LOGGER.warning(
+            "Não foi possível ler o estado local de runtime: %s",
+            error,
+        )
+        return None
+
+    separator = state.get(PRICE_SEPARATOR_STATE_KEY)
+
+    if separator not in PRICE_DECIMAL_SEPARATORS:
+        LOGGER.warning(
+            "Separador decimal salvo é inválido e será ignorado: %r",
+            separator,
+        )
+        return None
+
+    _PREFERRED_PRICE_DECIMAL_SEPARATOR = separator
+    LOGGER.info(
+        "Separador decimal preferido carregado do estado local: %r",
+        separator,
+    )
+    return separator
+
+
+def _save_preferred_price_decimal_separator(separator):
+    """Salva a preferência local sem tornar a execução dependente do arquivo."""
+    global _PREFERRED_PRICE_DECIMAL_SEPARATOR
+    global _PRICE_SEPARATOR_STATE_LOADED
+
+    _PREFERRED_PRICE_DECIMAL_SEPARATOR = separator
+    _PRICE_SEPARATOR_STATE_LOADED = True
+
+    state = {}
+
+    if RUNTIME_STATE_FILE.exists():
+        try:
+            state = json.loads(RUNTIME_STATE_FILE.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            state = {}
+
+    state[PRICE_SEPARATOR_STATE_KEY] = separator
+    temporary_file = RUNTIME_STATE_FILE.with_suffix(".tmp")
+
+    try:
+        temporary_file.write_text(
+            json.dumps(state, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        temporary_file.replace(RUNTIME_STATE_FILE)
+    except OSError as error:
+        LOGGER.warning(
+            "Separador decimal foi aprendido em memória, mas não pôde ser "
+            "persistido para próximas execuções: %s",
+            error,
+        )
+        try:
+            temporary_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+def _parse_numeric_value(value):
+    """Converte valores monetários/decimais em Decimal de forma independente da localidade."""
+    normalized = str(value).strip()
+
+    # Mantém apenas os caracteres relevantes para o valor numérico.
+    normalized = "".join(
+        character
+        for character in normalized
+        if character.isdigit() or character in {"-", ".", ","}
+    )
+
+    if not normalized or normalized in {"-", ".", ","}:
+        raise ValueError(f"Valor numérico inválido: {value!r}")
+
+    if "." in normalized and "," in normalized:
+        # Quando os dois separadores aparecem, o último é tratado como decimal
+        # e o outro como separador de milhar.
+        decimal_separator = (
+            "." if normalized.rfind(".") > normalized.rfind(",") else ","
+        )
+        thousands_separator = "," if decimal_separator == "." else "."
+        normalized = normalized.replace(thousands_separator, "")
+        normalized = normalized.replace(decimal_separator, ".")
+    elif "," in normalized:
+        normalized = normalized.replace(",", ".")
+
+    try:
+        return Decimal(normalized)
+    except InvalidOperation as error:
+        raise ValueError(f"Valor numérico inválido: {value!r}") from error
 
 
 
@@ -418,6 +845,15 @@ def _activate_window(window_handle):
             )
 
 
+def _maximize_window(window_handle):
+    """Maximiza a janela principal do Fakturama e mantém o foco."""
+    user32, _, _ = _get_win32_apis()
+
+    user32.ShowWindow(window_handle, SW_MAXIMIZE)
+    time.sleep(WINDOW_MAXIMIZE_WAIT_SECONDS)
+    ensure_fakturama_foreground()
+
+
 def _get_win32_apis():
     """Carrega e configura as APIs Win32 usadas no controle da janela."""
     global _USER32, _KERNEL32
@@ -444,6 +880,12 @@ def _get_win32_apis():
             wintypes.UINT,
         ]
         _USER32.GetWindow.restype = wintypes.HWND
+
+        _USER32.GetWindowRect.argtypes = [
+            wintypes.HWND,
+            ctypes.POINTER(wintypes.RECT),
+        ]
+        _USER32.GetWindowRect.restype = wintypes.BOOL
 
         _USER32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
         _USER32.GetWindowTextLengthW.restype = ctypes.c_int
@@ -533,6 +975,7 @@ def open_fakturama():
         )
 
         ensure_fakturama_foreground()
+        _maximize_window(_FAKTURAMA_WINDOW_HANDLE)
 
         # Product+ indica visualmente que o aplicativo terminou de abrir.
         wait_for_image(PRODUCT_IMAGE)
@@ -569,19 +1012,122 @@ def register_customer(buyer: dict):
 
     ensure_fakturama_foreground()
     click_image(CONTACT_IMAGE)
-    wait_for_image(NEW_DEBTOR_IMAGE)
+
+    # A aba de novo contato confirma que o formulário terminou de abrir.
+    wait_for_image(NEW_DEBTOR_IMAGES)
+    wait_for_image(FIRST_NAME_LAST_NAME_IMAGES)
 
     # O Customer ID é gerado automaticamente pelo Fakturama.
-    click_right_of_image(FIRST_NAME_LAST_NAME_IMAGE)
+    click_right_of_image(FIRST_NAME_LAST_NAME_IMAGES)
     paste_text(buyer["first_name"])
 
     pyautogui.press("tab")
     paste_text(buyer["last_name"])
 
-    click_right_of_image(ZIP_CITY_IMAGE)
+    _click_zip_city_field()
     paste_text(buyer["zip_code"])
 
     _save_and_close_tab()
+
+
+def _click_zip_city_field():
+    """Localiza o ZIP/City mesmo quando o formulário varia entre máquinas."""
+    try:
+        click_right_of_image(
+            ZIP_CITY_IMAGES,
+            timeout=SHORT_ANCHOR_TIMEOUT_SECONDS,
+        )
+        return
+    except TimeoutError:
+        LOGGER.info(
+            "ZIP/City não visível diretamente; iniciando busca com scroll."
+        )
+
+    last_error = None
+
+    for attempt in range(1, CONTACT_SCROLL_ATTEMPTS + 1):
+        _scroll_contact_form_down()
+
+        try:
+            click_right_of_image(
+                ZIP_CITY_IMAGES,
+                timeout=SHORT_ANCHOR_TIMEOUT_SECONDS,
+            )
+            LOGGER.info(
+                "ZIP/City localizado após scroll %d/%d",
+                attempt,
+                CONTACT_SCROLL_ATTEMPTS,
+            )
+            return
+        except TimeoutError as error:
+            last_error = error
+
+        try:
+            _click_zip_city_from_address_rows()
+            LOGGER.info(
+                "ZIP/City localizado pela geometria das linhas de endereço "
+                "após scroll %d/%d",
+                attempt,
+                CONTACT_SCROLL_ATTEMPTS,
+            )
+            return
+        except (TimeoutError, RuntimeError) as error:
+            last_error = error
+
+    raise TimeoutError(
+        "Não foi possível localizar com segurança o campo ZIP/City."
+    ) from last_error
+
+
+def _scroll_contact_form_down():
+    """Rola o painel superior do formulário de contato para baixo."""
+    left, top, width, height = _get_fakturama_window_region()
+    x = left + width - 35
+    y = top + int(height * 0.40)
+    pyautogui.moveTo(x, y)
+    pyautogui.scroll(CONTACT_SCROLL_AMOUNT)
+    time.sleep(CONTACT_SCROLL_WAIT_SECONDS)
+
+
+def _click_zip_city_from_address_rows():
+    """Calcula o ZIP/City a partir de duas linhas de endereço reconhecidas."""
+    street = wait_for_image(
+        STREET_IMAGES,
+        timeout=SHORT_ANCHOR_TIMEOUT_SECONDS,
+    )
+    address_specification = wait_for_image(
+        ADDRESS_SPECIFICATION_IMAGES,
+        timeout=SHORT_ANCHOR_TIMEOUT_SECONDS,
+    )
+
+    row_spacing = address_specification.top - street.top
+
+    if row_spacing <= 0 or row_spacing > 80:
+        raise RuntimeError(
+            "Espaçamento inesperado entre as linhas Street e "
+            f"Address specification: {row_spacing}px"
+        )
+
+    x = street.left + street.width + FIELD_CLICK_OFFSET_X
+    y = (
+        street.top
+        + (ZIP_ROW_OFFSET_FROM_STREET * row_spacing)
+        + (street.height // 2)
+    )
+
+    left, top, width, height = _get_fakturama_window_region()
+    if not (left <= x < left + width and top <= y < top + height):
+        raise RuntimeError(
+            "Posição calculada para ZIP/City ficou fora da janela do Fakturama."
+        )
+
+    # Se a geometria estiver incorreta, a validação de cor impede a digitação
+    # em outro componente da interface.
+    _click_and_validate_focus(
+        x,
+        y,
+        "ZIP - City (posição relativa)",
+    )
 
 
 def register_product(product: dict):
@@ -603,26 +1149,31 @@ def register_product(product: dict):
     click_image(PRODUCT_IMAGE)
 
     # A presença do campo Item Number confirma que o formulário está pronto.
-    wait_for_image(ITEM_NUMBER_IMAGE)
+    wait_for_image(ITEM_NUMBER_IMAGES)
 
-    click_right_of_image(ITEM_NUMBER_IMAGE)
+    click_right_of_image(ITEM_NUMBER_IMAGES)
     paste_text(product["item_number"])
 
-    click_right_of_image(NAME_IMAGE)
+    click_right_of_image(NAME_IMAGES)
     paste_text(product["name"])
 
     # A imagem de Description inclui o próprio campo, então o clique é central.
-    click_field_image(DESCRIPTION_IMAGE)
+    click_field_image(DESCRIPTION_IMAGES)
     paste_text(product["description"])
 
-    # O Fakturama utiliza vírgula como separador decimal.
-    fakturama_price = str(product["price"]).replace(".", ",")
+    click_right_of_image(PRICE_GROSS_IMAGES)
+    _, validated_price_candidate = paste_and_validate_numeric(
+        product["price"],
+        "Price (gross)",
+        input_candidates=_build_price_input_candidates(product["price"]),
+    )
+    _remember_price_decimal_separator(validated_price_candidate)
 
-    click_right_of_image(PRICE_GROSS_IMAGE)
-    paste_text(fakturama_price)
-
-    click_right_of_image(STOCK_IMAGE)
-    paste_text(DEFAULT_PRODUCT_STOCK)
+    click_right_of_image(STOCK_IMAGES)
+    paste_and_validate_numeric(
+        DEFAULT_PRODUCT_STOCK,
+        "Stock",
+    )
 
     _save_and_close_tab()
 
@@ -654,36 +1205,76 @@ def capture_screenshot(screenshot_path):
 
 
 def close_fakturama():
-    """Fecha o Fakturama ao final da execução."""
+    """Fecha o Fakturama tratando as confirmações exibidas pela aplicação."""
     global _FAKTURAMA_WINDOW_HANDLE
 
     ensure_fakturama_foreground()
     time.sleep(FAKTURAMA_CLOSE_WAIT_SECONDS)
+
+    # 1) Solicita o fechamento da aplicação.
     pyautogui.hotkey("alt", "f4")
-    _FAKTURAMA_WINDOW_HANDLE = None
+    time.sleep(FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS)
+
+    # 2) Confirma o diálogo "Quit Fakturama".
+    pyautogui.press("enter")
+    time.sleep(FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS)
+
+    process_name = PureWindowsPath(FAKTURAMA_EXE).name
+
+    # 3) Quando existe uma aba/registro não salvo, o Fakturama pode abrir o
+    # diálogo "Save Parts". Executa a sequência solicitada somente se o
+    # processo ainda estiver ativo, evitando enviar teclas a outra aplicação.
+    if _is_process_running(process_name):
+        pyautogui.hotkey("shift", "tab")
+        pyautogui.press("enter")
+
+    deadline = time.monotonic() + FAKTURAMA_TERMINATION_TIMEOUT_SECONDS
+
+    while time.monotonic() < deadline:
+        if not _is_process_running(process_name):
+            _FAKTURAMA_WINDOW_HANDLE = None
+            return
+
+        time.sleep(IMAGE_POLL_INTERVAL_SECONDS)
+
+    raise TimeoutError(
+        "O Fakturama permaneceu aberto após as confirmações de fechamento."
+    )
 
 
 def _click_and_validate_focus(x, y, field_name):
-    """Clica no campo e confirma visualmente que ele recebeu foco."""
-    for attempt in range(1, FOCUS_CLICK_MAX_ATTEMPTS + 1):
-        pyautogui.click(x, y)
+    """Valida o foco tentando até cinco posições 5 px mais à direita."""
+    total_attempts = FOCUS_RETRY_COUNT + 1
+
+    for attempt in range(total_attempts):
+        current_x = x + (attempt * FOCUS_RETRY_OFFSET_X)
+
+        pyautogui.click(current_x, y)
         time.sleep(FOCUS_AFTER_CLICK_WAIT_SECONDS)
 
-        if _is_field_focused(x, y):
+        if _is_field_focused(current_x, y):
+            if attempt:
+                LOGGER.info(
+                    "Foco confirmado no campo %s após deslocamento de +%dpx",
+                    field_name,
+                    attempt * FOCUS_RETRY_OFFSET_X,
+                )
             return
 
         LOGGER.warning(
-            "Foco não confirmado no campo %s após tentativa %d/%d",
+            "Foco não confirmado no campo %s na tentativa %d/%d "
+            "(deslocamento +%dpx)",
             field_name,
-            attempt,
-            FOCUS_CLICK_MAX_ATTEMPTS,
+            attempt + 1,
+            total_attempts,
+            attempt * FOCUS_RETRY_OFFSET_X,
         )
 
     raise RuntimeError(
-        f"Campo não recebeu foco após {FOCUS_CLICK_MAX_ATTEMPTS} "
-        f"tentativas: {field_name}"
+        f"Campo não recebeu foco após a posição inicial e "
+        f"{FOCUS_RETRY_COUNT} novas tentativas de "
+        f"{FOCUS_RETRY_OFFSET_X}px à direita: {field_name}"
     )
-
 
 def _is_field_focused(x, y):
     """Verifica se a região clicada possui a cor de foco do Fakturama."""

@@ -22,6 +22,7 @@ htmlcov/
 Thumbs.db
 
 # Environment / local config
+.runtime_state.json
 .env
 .env.*
 !.env.example
