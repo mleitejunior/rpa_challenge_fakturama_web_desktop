@@ -1220,15 +1220,18 @@ def close_fakturama():
     ensure_fakturama_foreground()
     time.sleep(FAKTURAMA_CLOSE_WAIT_SECONDS)
 
+    process_name = PureWindowsPath(FAKTURAMA_EXE).name
+
     # 1) Solicita o fechamento da aplicação.
     pyautogui.hotkey("alt", "f4")
     time.sleep(FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS)
 
-    # 2) Confirma o diálogo "Quit Fakturama".
-    pyautogui.press("enter")
-    time.sleep(FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS)
-
-    process_name = PureWindowsPath(FAKTURAMA_EXE).name
+    # 2) Confirma o diálogo "Quit Fakturama" somente se o processo ainda
+    # estiver ativo. Se o aplicativo já fechou, evita enviar Enter para a
+    # próxima aplicação que recebeu o foco.
+    if _is_process_running(process_name):
+        pyautogui.press("enter")
+        time.sleep(FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS)
 
     # 3) Quando existe uma aba/registro não salvo, o Fakturama pode abrir o
     # diálogo "Save Parts". Executa a sequência solicitada somente se o
