@@ -38,6 +38,12 @@ build/
 dist/
 *.egg-info/
 
-# Runtime results
+# Resultados gerados em runtime
 results/*
+
+# Mantém a pasta results no repositório
 !results/.gitkeep
+
+# Mantém especificamente a execução usada como evidência
+!results/2026-09-21_234913/
+!results/2026-09-21_234913/**

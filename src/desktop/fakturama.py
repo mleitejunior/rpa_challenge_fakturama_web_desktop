@@ -1,3 +1,4 @@
+import logging
 import subprocess
 import time
 from pathlib import Path
@@ -5,6 +6,8 @@ from pathlib import Path
 import pyautogui
 import pyperclip
 
+
+LOGGER = logging.getLogger("rpa.fakturama")
 
 FAKTURAMA_EXE = r"C:\Program Files\Fakturama2\Fakturama.exe"
 
@@ -23,6 +26,8 @@ NAME_IMAGE = FAKTURAMA_ASSETS / "name.png"
 DESCRIPTION_IMAGE = FAKTURAMA_ASSETS / "description.png"
 PRICE_GROSS_IMAGE = FAKTURAMA_ASSETS / "price_gross.png"
 STOCK_IMAGE = FAKTURAMA_ASSETS / "stock.png"
+DEBTORS_LIST_IMAGE = FAKTURAMA_ASSETS / "debtors_list.png"
+PRODUCTS_LIST_IMAGE = FAKTURAMA_ASSETS / "products_list.png"
 
 # Esperas e timeouts.
 IMAGE_CONFIDENCE = 0.80
@@ -31,6 +36,7 @@ IMAGE_POLL_INTERVAL_SECONDS = 0.5
 FAKTURAMA_AFTER_SAVE_WAIT_SECONDS = 0.5
 FAKTURAMA_CLOSE_WAIT_SECONDS = 1
 FOCUS_AFTER_CLICK_WAIT_SECONDS = 0.1
+EVIDENCE_VIEW_WAIT_SECONDS = 1
 
 # Interação desktop.
 FIELD_CLICK_OFFSET_X = 10
@@ -201,6 +207,29 @@ def register_products(products: list[dict]):
         register_product(product)
 
 
+def capture_customer_evidence(screenshot_path):
+    """Abre a lista de compradores e captura a evidência do cadastro."""
+    click_image(DEBTORS_LIST_IMAGE)
+    time.sleep(EVIDENCE_VIEW_WAIT_SECONDS)
+    return capture_screenshot(screenshot_path)
+
+
+def capture_products_evidence(screenshot_path):
+    """Abre a lista de produtos e captura a evidência dos cadastros."""
+    click_image(PRODUCTS_LIST_IMAGE)
+    time.sleep(EVIDENCE_VIEW_WAIT_SECONDS)
+    return capture_screenshot(screenshot_path)
+
+
+def capture_screenshot(screenshot_path):
+    """Captura a tela atual e salva a imagem no caminho informado."""
+    path = Path(screenshot_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    pyautogui.screenshot(str(path))
+    return path
+
+
 def close_fakturama():
     """Fecha o Fakturama ao final da execução."""
     time.sleep(FAKTURAMA_CLOSE_WAIT_SECONDS)
@@ -215,6 +244,13 @@ def _click_and_validate_focus(x, y, field_name):
 
         if _is_field_focused(x, y):
             return
+
+        LOGGER.warning(
+            "Foco não confirmado no campo %s após tentativa %d/%d",
+            field_name,
+            attempt,
+            FOCUS_CLICK_MAX_ATTEMPTS,
+        )
 
     raise RuntimeError(
         f"Campo não recebeu foco após {FOCUS_CLICK_MAX_ATTEMPTS} "

@@ -1,0 +1,36 @@
+2026-09-21 23:49:13 | INFO  | Execução iniciada
+2026-09-21 23:49:13 | INFO  | Pasta de resultados: C:\Users\mleit\PycharmProjects\rpa_challenge_fakturama_web_desktop\results\2026-09-21_234913
+2026-09-21 23:49:14 | INFO  | Coleta do comprador iniciada
+2026-09-21 23:49:15 | INFO  | Comprador coletado: Julieta Rodrigues Martins
+2026-09-21 23:49:15 | INFO  | Login e coleta do catálogo SauceDemo iniciados
+2026-09-21 23:49:16 | INFO  | Produtos encontrados: 6
+2026-09-21 23:49:16 | INFO  | Produto [1/6] coletado: 4 | Sauce Labs Backpack
+2026-09-21 23:49:16 | INFO  | Produto [2/6] coletado: 0 | Sauce Labs Bike Light
+2026-09-21 23:49:16 | INFO  | Produto [3/6] coletado: 1 | Sauce Labs Bolt T-Shirt
+2026-09-21 23:49:16 | INFO  | Produto [4/6] coletado: 5 | Sauce Labs Fleece Jacket
+2026-09-21 23:49:16 | INFO  | Produto [5/6] coletado: 2 | Sauce Labs Onesie
+2026-09-21 23:49:16 | INFO  | Produto [6/6] coletado: 3 | Test.allTheThings() T-Shirt (Red)
+2026-09-21 23:49:17 | INFO  | Comprador persistido em: C:\Users\mleit\PycharmProjects\rpa_challenge_fakturama_web_desktop\results\2026-09-21_234913\buyer.csv
+2026-09-21 23:49:17 | INFO  | Catálogo de produtos persistido em: C:\Users\mleit\PycharmProjects\rpa_challenge_fakturama_web_desktop\results\2026-09-21_234913\products.csv
+2026-09-21 23:49:17 | INFO  | Abertura do Fakturama iniciada
+2026-09-21 23:49:23 | INFO  | Fakturama disponível
+2026-09-21 23:49:23 | INFO  | Cadastro do comprador no Fakturama iniciado
+2026-09-21 23:49:26 | INFO  | Comprador cadastrado com sucesso
+2026-09-21 23:49:27 | INFO  | Evidência do comprador salva em: C:\Users\mleit\PycharmProjects\rpa_challenge_fakturama_web_desktop\results\2026-09-21_234913\screenshots\customer_registered.png
+2026-09-21 23:49:27 | INFO  | Cadastro do produto [1/6] iniciado: 4 | Sauce Labs Backpack
+2026-09-21 23:49:31 | INFO  | Produto [1/6] cadastrado com sucesso: 4 | Sauce Labs Backpack
+2026-09-21 23:49:31 | INFO  | Cadastro do produto [2/6] iniciado: 0 | Sauce Labs Bike Light
+2026-09-21 23:49:34 | INFO  | Produto [2/6] cadastrado com sucesso: 0 | Sauce Labs Bike Light
+2026-09-21 23:49:34 | INFO  | Cadastro do produto [3/6] iniciado: 1 | Sauce Labs Bolt T-Shirt
+2026-09-21 23:49:37 | INFO  | Produto [3/6] cadastrado com sucesso: 1 | Sauce Labs Bolt T-Shirt
+2026-09-21 23:49:37 | INFO  | Cadastro do produto [4/6] iniciado: 5 | Sauce Labs Fleece Jacket
+2026-09-21 23:49:41 | INFO  | Produto [4/6] cadastrado com sucesso: 5 | Sauce Labs Fleece Jacket
+2026-09-21 23:49:41 | INFO  | Cadastro do produto [5/6] iniciado: 2 | Sauce Labs Onesie
+2026-09-21 23:49:44 | INFO  | Produto [5/6] cadastrado com sucesso: 2 | Sauce Labs Onesie
+2026-09-21 23:49:44 | INFO  | Cadastro do produto [6/6] iniciado: 3 | Test.allTheThings() T-Shirt (Red)
+2026-09-21 23:49:47 | INFO  | Produto [6/6] cadastrado com sucesso: 3 | Test.allTheThings() T-Shirt (Red)
+2026-09-21 23:49:49 | INFO  | Evidência dos produtos salva em: C:\Users\mleit\PycharmProjects\rpa_challenge_fakturama_web_desktop\results\2026-09-21_234913\screenshots\products_registered.png
+2026-09-21 23:49:50 | INFO  | Fakturama fechado
+2026-09-21 23:49:50 | INFO  | Compradores cadastrados: 1/1
+2026-09-21 23:49:50 | INFO  | Produtos cadastrados: 6/6
+2026-09-21 23:49:50 | INFO  | Execução finalizada com sucesso
