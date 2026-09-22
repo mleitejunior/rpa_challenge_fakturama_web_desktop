@@ -6,10 +6,23 @@ from pathlib import Path
 import pyautogui
 import pyperclip
 
+from src.config.settings import (
+    EVIDENCE_VIEW_WAIT_SECONDS,
+    FAKTURAMA_AFTER_SAVE_WAIT_SECONDS,
+    FAKTURAMA_CLOSE_WAIT_SECONDS,
+    FAKTURAMA_EXE,
+    FIELD_CLICK_OFFSET_X,
+    FOCUS_AFTER_CLICK_WAIT_SECONDS,
+    FOCUS_CLICK_MAX_ATTEMPTS,
+    FOCUS_COLOR_TOLERANCE,
+    FOCUS_MIN_MATCH_RATIO,
+    IMAGE_CONFIDENCE,
+    IMAGE_POLL_INTERVAL_SECONDS,
+    IMAGE_TIMEOUT_SECONDS,
+)
 
 LOGGER = logging.getLogger("rpa.fakturama")
 
-FAKTURAMA_EXE = r"C:\Program Files\Fakturama2\Fakturama.exe"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FAKTURAMA_ASSETS = PROJECT_ROOT / "resources" / "images" / "fakturama"
@@ -29,27 +42,14 @@ STOCK_IMAGE = FAKTURAMA_ASSETS / "stock.png"
 DEBTORS_LIST_IMAGE = FAKTURAMA_ASSETS / "debtors_list.png"
 PRODUCTS_LIST_IMAGE = FAKTURAMA_ASSETS / "products_list.png"
 
-# Esperas e timeouts.
-IMAGE_CONFIDENCE = 0.80
-IMAGE_TIMEOUT_SECONDS = 180
-IMAGE_POLL_INTERVAL_SECONDS = 0.5
-FAKTURAMA_AFTER_SAVE_WAIT_SECONDS = 0.5
-FAKTURAMA_CLOSE_WAIT_SECONDS = 1
-FOCUS_AFTER_CLICK_WAIT_SECONDS = 0.1
-EVIDENCE_VIEW_WAIT_SECONDS = 1
-
-# Interação desktop.
-FIELD_CLICK_OFFSET_X = 10
+# Regras internas da automação desktop.
 DEFAULT_PRODUCT_STOCK = "1"
 
 # Validação visual de foco dos campos.
 # O Fakturama destaca o input ativo com este tom de amarelo.
 FOCUSED_FIELD_COLOR = (250, 240, 162)
-FOCUS_COLOR_TOLERANCE = 12
 FOCUS_SAMPLE_WIDTH = 12
 FOCUS_SAMPLE_HEIGHT = 8
-FOCUS_MIN_MATCH_RATIO = 0.60
-FOCUS_CLICK_MAX_ATTEMPTS = 2
 
 # O copy/paste com pyperclip foi mantido por ser significativamente mais rápido
 # que a digitação caractere a caractere. Como trade-off, o conteúdo atual do

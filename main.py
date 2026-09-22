@@ -1,7 +1,6 @@
-from pathlib import Path
-
 from playwright.sync_api import sync_playwright
 
+from src.config.settings import APP_ENV, BROWSER_HEADLESS, RESULTS_DIR
 from src.core.execution import (
     configure_execution_logger,
     create_execution_paths,
@@ -25,12 +24,6 @@ from src.web.buyer_scraper import scrape_buyer
 from src.web.sauce_demo import scrape_products
 
 
-BROWSER_HEADLESS = False
-
-BASE_DIR = Path(__file__).resolve().parent
-RESULTS_DIR = BASE_DIR / "results"
-
-
 def main():
     execution = create_execution_paths(RESULTS_DIR)
     logger = configure_execution_logger(execution.log_file)
@@ -43,6 +36,7 @@ def main():
     success = False
 
     logger.info("Execução iniciada")
+    logger.info("Ambiente: %s", APP_ENV)
     logger.info("Pasta de resultados: %s", execution.run_dir)
 
     try:

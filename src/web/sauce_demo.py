@@ -3,13 +3,13 @@ import time
 
 from playwright.sync_api import Page
 
-
-SAUCE_DEMO_URL = "https://www.saucedemo.com/"
-SAUCE_USERNAME = "standard_user"
-SAUCE_PASSWORD = "secret_sauce"
-
-SAUCE_PRODUCTS_TIMEOUT_MS = 15000
-SAUCE_PRODUCTS_RENDER_WAIT_SECONDS = 1
+from src.config.settings import (
+    SAUCE_DEMO_URL,
+    SAUCE_PASSWORD,
+    SAUCE_PRODUCTS_RENDER_WAIT_SECONDS,
+    SAUCE_PRODUCTS_TIMEOUT_MS,
+    SAUCE_USERNAME,
+)
 
 USERNAME_SELECTOR = '[data-test="username"]'
 PASSWORD_SELECTOR = '[data-test="password"]'

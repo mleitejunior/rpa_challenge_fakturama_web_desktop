@@ -3,9 +3,7 @@ from datetime import date
 
 from playwright.sync_api import Page
 
-
-FAKE_NAME_URL = "https://www.fakenamegenerator.com/gen-random-br-br.php"
-FAKE_NAME_TIMEOUT_MS = 15000
+from src.config.settings import FAKE_NAME_TIMEOUT_MS, FAKE_NAME_URL
 
 NAME_SELECTOR = "#details .address h3"
 ADDRESS_SELECTOR = "#details .address .adr"
