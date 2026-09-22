@@ -185,8 +185,10 @@ RESULTS_DIR=results
 FAKTURAMA_EXE=C:\Program Files\Fakturama2\Fakturama.exe
 FAKTURAMA_TERMINATION_TIMEOUT_SECONDS=10
 
-IMAGE_CONFIDENCE=0.80
+ICON_IMAGE_CONFIDENCE=0.80
+TEXT_IMAGE_CONFIDENCE=0.75
 IMAGE_TIMEOUT_SECONDS=180
+FOCUS_CLICK_MAX_ATTEMPTS=6
 SAUCE_PRODUCTS_TIMEOUT_MS=15000
 ```
 
@@ -200,7 +202,7 @@ FAKTURAMA_EXE=C:\caminho\para\Fakturama.exe
 
 Não é necessário alterar o código-fonte.
 
-Os demais parâmetros de timeout, polling e validação visual estão documentados no próprio `.env.example`.
+Os demais parâmetros de timeout, polling e validação visual estão documentados no próprio `.env.example`. `IMAGE_CONFIDENCE` é mantido apenas como fallback para compatibilidade com `.env` antigos; para novos ajustes, use `ICON_IMAGE_CONFIDENCE` e `TEXT_IMAGE_CONFIDENCE`.
 
 `APP_ENV` identifica o ambiente no log. O projeto não mantém perfis separados de `dev`, `staging` e `production`; os valores necessários podem ser sobrescritos por variáveis de ambiente.
 
@@ -341,7 +343,7 @@ A automação desktop utiliza reconhecimento de imagem e offsets relativos às �
 - o preenchimento utiliza clipboard para ganhar velocidade, portanto o conteúdo atual da área de transferência é sobrescrito;
 - repetir a execução cria novos registros no Fakturama.
 
-Antes de inserir texto em um campo, a automação valida visualmente se o input recebeu foco pela cor de destaque da interface. Caso o foco não seja confirmado após as tentativas configuradas, a execução é interrompida e o erro é registrado.
+Antes de inserir texto em um campo, a automação valida visualmente se o input recebeu foco pela cor de destaque da interface. Caso o foco não seja confirmado após `FOCUS_CLICK_MAX_ATTEMPTS` tentativas, a execução é interrompida e o erro é registrado.
 
 ## Outras Documentações
 

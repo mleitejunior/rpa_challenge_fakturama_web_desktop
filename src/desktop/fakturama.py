@@ -18,6 +18,7 @@ from src.config.settings import (
     FAKTURAMA_TERMINATION_TIMEOUT_SECONDS,
     FIELD_CLICK_OFFSET_X,
     FOCUS_AFTER_CLICK_WAIT_SECONDS,
+    FOCUS_CLICK_MAX_ATTEMPTS,
     FOCUS_COLOR_TOLERANCE,
     FOCUS_MIN_MATCH_RATIO,
     ICON_IMAGE_CONFIDENCE,
@@ -135,7 +136,6 @@ FOCUSED_FIELD_COLOR = (250, 240, 162)
 FOCUS_SAMPLE_WIDTH = 12
 FOCUS_SAMPLE_HEIGHT = 8
 FOCUS_RETRY_OFFSET_X = 5
-FOCUS_RETRY_COUNT = 5
 
 # Confirmações de fechamento do Fakturama.
 FAKTURAMA_CLOSE_CONFIRM_WAIT_SECONDS = 0.5
@@ -1255,8 +1255,8 @@ def close_fakturama():
 
 
 def _click_and_validate_focus(x, y, field_name):
-    """Valida o foco tentando até cinco posições 5 px mais à direita."""
-    total_attempts = FOCUS_RETRY_COUNT + 1
+    """Valida o foco usando a quantidade configurada de tentativas."""
+    total_attempts = FOCUS_CLICK_MAX_ATTEMPTS
 
     for attempt in range(total_attempts):
         current_x = x + (attempt * FOCUS_RETRY_OFFSET_X)
@@ -1283,9 +1283,9 @@ def _click_and_validate_focus(x, y, field_name):
         )
 
     raise RuntimeError(
-        f"Campo não recebeu foco após a posição inicial e "
-        f"{FOCUS_RETRY_COUNT} novas tentativas de "
-        f"{FOCUS_RETRY_OFFSET_X}px à direita: {field_name}"
+        f"Campo não recebeu foco após {FOCUS_CLICK_MAX_ATTEMPTS} "
+        f"tentativas com deslocamentos de {FOCUS_RETRY_OFFSET_X}px "
+        f"à direita: {field_name}"
     )
 
 
