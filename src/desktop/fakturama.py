@@ -1,7 +1,9 @@
+import ctypes
 import logging
+import os
 import subprocess
 import time
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pyautogui
 import pyperclip
@@ -45,6 +47,18 @@ PRODUCTS_LIST_IMAGE = FAKTURAMA_ASSETS / "products_list.png"
 
 # Regras internas da automação desktop.
 DEFAULT_PRODUCT_STOCK = "1"
+
+# Controle da janela do Fakturama no Windows.
+WINDOW_FOCUS_MAX_ATTEMPTS = 5
+WINDOW_FOCUS_RETRY_SECONDS = 0.25
+SW_RESTORE = 9
+GW_OWNER = 4
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_IMAGE_BUFFER_SIZE = 32768
+
+_FAKTURAMA_WINDOW_HANDLE = None
+_USER32 = None
+_KERNEL32 = None
 
 # Validação visual de foco dos campos.
 # O Fakturama destaca o input ativo com este tom de amarelo.
@@ -117,7 +131,10 @@ def paste_text(value):
 
 def terminate_existing_fakturama():
     """Encerra qualquer instância anterior do Fakturama antes da execução."""
-    process_name = Path(FAKTURAMA_EXE).name
+    global _FAKTURAMA_WINDOW_HANDLE
+
+    _FAKTURAMA_WINDOW_HANDLE = None
+    process_name = PureWindowsPath(FAKTURAMA_EXE).name
 
     if not _is_process_running(process_name):
         return False
@@ -179,8 +196,324 @@ def _is_process_running(process_name):
 
     return process_name.lower() in result.stdout.lower()
 
+def ensure_fakturama_foreground():
+    """Garante que a janela principal do Fakturama esteja em primeiro plano."""
+    global _FAKTURAMA_WINDOW_HANDLE
+
+    user32, _, _ = _get_win32_apis()
+
+    if (
+        _FAKTURAMA_WINDOW_HANDLE is None
+        or not user32.IsWindow(_FAKTURAMA_WINDOW_HANDLE)
+    ):
+        _FAKTURAMA_WINDOW_HANDLE = _wait_for_fakturama_window()
+
+    window_handle = _FAKTURAMA_WINDOW_HANDLE
+
+    if user32.GetForegroundWindow() == window_handle:
+        return window_handle
+
+    for attempt in range(1, WINDOW_FOCUS_MAX_ATTEMPTS + 1):
+        _activate_window(window_handle)
+        time.sleep(WINDOW_FOCUS_RETRY_SECONDS)
+
+        if user32.GetForegroundWindow() == window_handle:
+            LOGGER.info(
+                "Fakturama colocado em primeiro plano após tentativa %d/%d",
+                attempt,
+                WINDOW_FOCUS_MAX_ATTEMPTS,
+            )
+            return window_handle
+
+        LOGGER.warning(
+            "Foco do Fakturama não confirmado após tentativa %d/%d",
+            attempt,
+            WINDOW_FOCUS_MAX_ATTEMPTS,
+        )
+
+    raise RuntimeError(
+        "Não foi possível colocar a janela do Fakturama em primeiro plano."
+    )
+
+
+def _wait_for_fakturama_window(process_id=None, timeout=IMAGE_TIMEOUT_SECONDS):
+    """Aguarda a janela principal do Fakturama ficar disponível."""
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        window_handle = _find_fakturama_window(process_id)
+
+        if window_handle:
+            return window_handle
+
+        time.sleep(IMAGE_POLL_INTERVAL_SECONDS)
+
+    raise TimeoutError(
+        f"Janela do Fakturama não encontrada em até {timeout}s."
+    )
+
+
+def _find_fakturama_window(process_id=None):
+    """Localiza a janela pertencente exatamente ao processo do Fakturama."""
+    user32, _, wintypes = _get_win32_apis()
+
+    expected_process_name = PureWindowsPath(FAKTURAMA_EXE).name.lower()
+    candidates = []
+
+    callback_type = ctypes.WINFUNCTYPE(
+        wintypes.BOOL,
+        wintypes.HWND,
+        wintypes.LPARAM,
+    )
+
+    @callback_type
+    def enum_window(window_handle, _):
+        if not user32.IsWindowVisible(window_handle):
+            return True
+
+        # Ignora janelas auxiliares/filhas que possuam uma janela proprietária.
+        if user32.GetWindow(window_handle, GW_OWNER):
+            return True
+
+        title = _get_window_title(window_handle)
+
+        if not title:
+            return True
+
+        window_process_id = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(
+            window_handle,
+            ctypes.byref(window_process_id),
+        )
+
+        owner_process_id = window_process_id.value
+
+        # Melhor cenário: a janela pertence exatamente ao PID retornado pelo Popen.
+        if process_id is not None and owner_process_id == process_id:
+            candidates.append((0, window_handle, title))
+            return True
+
+        # Alguns launchers podem criar outro processo. Nesse caso, só aceitamos
+        # uma janela cujo executável proprietário seja exatamente Fakturama.exe.
+        owner_process_name = _get_process_executable_name(owner_process_id)
+
+        if owner_process_name != expected_process_name:
+            return True
+
+        candidates.append((1, window_handle, title))
+        return True
+
+    user32.EnumWindows(enum_window, 0)
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0])
+    _, window_handle, title = candidates[0]
+
+    LOGGER.debug(
+        "Janela do Fakturama identificada: hwnd=%s | título=%s",
+        window_handle,
+        title,
+    )
+    return window_handle
+
+
+def _get_process_executable_name(process_id):
+    """Obtém o nome exato do executável proprietário de um processo Windows."""
+    _, kernel32, wintypes = _get_win32_apis()
+
+    process_handle = kernel32.OpenProcess(
+        PROCESS_QUERY_LIMITED_INFORMATION,
+        False,
+        process_id,
+    )
+
+    if not process_handle:
+        return None
+
+    try:
+        buffer = ctypes.create_unicode_buffer(PROCESS_IMAGE_BUFFER_SIZE)
+        buffer_size = wintypes.DWORD(len(buffer))
+
+        success = kernel32.QueryFullProcessImageNameW(
+            process_handle,
+            0,
+            buffer,
+            ctypes.byref(buffer_size),
+        )
+
+        if not success:
+            return None
+
+        return PureWindowsPath(buffer.value).name.lower()
+
+    finally:
+        kernel32.CloseHandle(process_handle)
+
+
+def _get_window_title(window_handle):
+    """Obtém o título de uma janela Win32."""
+    user32, _, _ = _get_win32_apis()
+    length = user32.GetWindowTextLengthW(window_handle)
+
+    if length <= 0:
+        return ""
+
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(window_handle, buffer, len(buffer))
+    return buffer.value.strip()
+
+
+def _activate_window(window_handle):
+    """Restaura e solicita ao Windows o foco da janela informada."""
+    user32, kernel32, wintypes = _get_win32_apis()
+
+    if user32.IsIconic(window_handle):
+        user32.ShowWindow(window_handle, SW_RESTORE)
+
+    foreground_window = user32.GetForegroundWindow()
+    current_thread_id = kernel32.GetCurrentThreadId()
+
+    foreground_thread_id = 0
+    if foreground_window:
+        foreground_thread_id = user32.GetWindowThreadProcessId(
+            foreground_window,
+            None,
+        )
+
+    target_thread_id = user32.GetWindowThreadProcessId(
+        window_handle,
+        None,
+    )
+
+    attached_threads = []
+
+    try:
+        for thread_id in {
+            foreground_thread_id,
+            target_thread_id,
+        }:
+            if (
+                thread_id
+                and thread_id != current_thread_id
+                and user32.AttachThreadInput(
+                    current_thread_id,
+                    thread_id,
+                    True,
+                )
+            ):
+                attached_threads.append(thread_id)
+
+        user32.ShowWindow(window_handle, SW_RESTORE)
+        user32.BringWindowToTop(window_handle)
+        user32.SetForegroundWindow(window_handle)
+
+    finally:
+        for thread_id in reversed(attached_threads):
+            user32.AttachThreadInput(
+                current_thread_id,
+                thread_id,
+                False,
+            )
+
+
+def _get_win32_apis():
+    """Carrega e configura as APIs Win32 usadas no controle da janela."""
+    global _USER32, _KERNEL32
+
+    if os.name != "nt":
+        raise RuntimeError(
+            "O controle de janela do Fakturama requer Windows."
+        )
+
+    from ctypes import wintypes
+
+    if _USER32 is None:
+        _USER32 = ctypes.WinDLL("user32", use_last_error=True)
+        _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        _USER32.IsWindow.argtypes = [wintypes.HWND]
+        _USER32.IsWindow.restype = wintypes.BOOL
+
+        _USER32.IsWindowVisible.argtypes = [wintypes.HWND]
+        _USER32.IsWindowVisible.restype = wintypes.BOOL
+
+        _USER32.GetWindow.argtypes = [
+            wintypes.HWND,
+            wintypes.UINT,
+        ]
+        _USER32.GetWindow.restype = wintypes.HWND
+
+        _USER32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+        _USER32.GetWindowTextLengthW.restype = ctypes.c_int
+
+        _USER32.GetWindowTextW.argtypes = [
+            wintypes.HWND,
+            wintypes.LPWSTR,
+            ctypes.c_int,
+        ]
+        _USER32.GetWindowTextW.restype = ctypes.c_int
+
+        _USER32.GetWindowThreadProcessId.argtypes = [
+            wintypes.HWND,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        _USER32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+        _USER32.IsIconic.argtypes = [wintypes.HWND]
+        _USER32.IsIconic.restype = wintypes.BOOL
+
+        _USER32.ShowWindow.argtypes = [
+            wintypes.HWND,
+            ctypes.c_int,
+        ]
+        _USER32.ShowWindow.restype = wintypes.BOOL
+
+        _USER32.BringWindowToTop.argtypes = [wintypes.HWND]
+        _USER32.BringWindowToTop.restype = wintypes.BOOL
+
+        _USER32.SetForegroundWindow.argtypes = [wintypes.HWND]
+        _USER32.SetForegroundWindow.restype = wintypes.BOOL
+
+        _USER32.GetForegroundWindow.argtypes = []
+        _USER32.GetForegroundWindow.restype = wintypes.HWND
+
+        _USER32.AttachThreadInput.argtypes = [
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.BOOL,
+        ]
+        _USER32.AttachThreadInput.restype = wintypes.BOOL
+
+        _KERNEL32.GetCurrentThreadId.argtypes = []
+        _KERNEL32.GetCurrentThreadId.restype = wintypes.DWORD
+
+        _KERNEL32.OpenProcess.argtypes = [
+            wintypes.DWORD,
+            wintypes.BOOL,
+            wintypes.DWORD,
+        ]
+        _KERNEL32.OpenProcess.restype = wintypes.HANDLE
+
+        _KERNEL32.QueryFullProcessImageNameW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        _KERNEL32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+
+        _KERNEL32.CloseHandle.argtypes = [wintypes.HANDLE]
+        _KERNEL32.CloseHandle.restype = wintypes.BOOL
+
+    return _USER32, _KERNEL32, wintypes
+
+
 def open_fakturama():
-    """Abre o Fakturama e aguarda a tela principal ficar disponível."""
+    """Abre o Fakturama, garante o foco e aguarda a tela principal."""
+    global _FAKTURAMA_WINDOW_HANDLE
+
     executable = Path(FAKTURAMA_EXE)
 
     if not executable.exists():
@@ -188,10 +521,35 @@ def open_fakturama():
             f"Executável do Fakturama não encontrado: {executable}"
         )
 
-    subprocess.Popen([str(executable)])
+    process = subprocess.Popen([str(executable)])
 
-    # Product+ é usado como indicador visual de que o aplicativo terminou de abrir.
-    wait_for_image(PRODUCT_IMAGE)
+    try:
+        _FAKTURAMA_WINDOW_HANDLE = _wait_for_fakturama_window(
+            process_id=process.pid,
+        )
+        LOGGER.info(
+            "Janela do Fakturama localizada: hwnd=%s",
+            _FAKTURAMA_WINDOW_HANDLE,
+        )
+
+        ensure_fakturama_foreground()
+
+        # Product+ indica visualmente que o aplicativo terminou de abrir.
+        wait_for_image(PRODUCT_IMAGE)
+
+    except Exception:
+        LOGGER.exception(
+            "Falha ao preparar a janela do Fakturama para automação"
+        )
+
+        try:
+            terminate_existing_fakturama()
+        except Exception:
+            LOGGER.exception(
+                "Não foi possível encerrar o Fakturama após falha na abertura"
+            )
+
+        raise
 
 
 def register_customer(buyer: dict):
@@ -209,6 +567,7 @@ def register_customer(buyer: dict):
             + ", ".join(missing_fields)
         )
 
+    ensure_fakturama_foreground()
     click_image(CONTACT_IMAGE)
     wait_for_image(NEW_DEBTOR_IMAGE)
 
@@ -240,6 +599,7 @@ def register_product(product: dict):
             + ", ".join(missing_fields)
         )
 
+    ensure_fakturama_foreground()
     click_image(PRODUCT_IMAGE)
 
     # A presença do campo Item Number confirma que o formulário está pronto.
@@ -270,6 +630,7 @@ def register_product(product: dict):
 
 def capture_customer_evidence(screenshot_path):
     """Abre a lista de compradores e captura a evidência do cadastro."""
+    ensure_fakturama_foreground()
     click_image(DEBTORS_LIST_IMAGE)
     time.sleep(EVIDENCE_VIEW_WAIT_SECONDS)
     return capture_screenshot(screenshot_path)
@@ -277,6 +638,7 @@ def capture_customer_evidence(screenshot_path):
 
 def capture_products_evidence(screenshot_path):
     """Abre a lista de produtos e captura a evidência dos cadastros."""
+    ensure_fakturama_foreground()
     click_image(PRODUCTS_LIST_IMAGE)
     time.sleep(EVIDENCE_VIEW_WAIT_SECONDS)
     return capture_screenshot(screenshot_path)
@@ -293,8 +655,12 @@ def capture_screenshot(screenshot_path):
 
 def close_fakturama():
     """Fecha o Fakturama ao final da execução."""
+    global _FAKTURAMA_WINDOW_HANDLE
+
+    ensure_fakturama_foreground()
     time.sleep(FAKTURAMA_CLOSE_WAIT_SECONDS)
     pyautogui.hotkey("alt", "f4")
+    _FAKTURAMA_WINDOW_HANDLE = None
 
 
 def _click_and_validate_focus(x, y, field_name):
