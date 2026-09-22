@@ -101,7 +101,7 @@ Há duas opções.
 
 **Opção A — Download pelo GitHub**
 
-Na página do repositório:
+Na página do repositório (esta mesma página, o botão verdinho CODE lá emcima):
 
 ```text
 Code → Download ZIP
