@@ -50,7 +50,7 @@ Baixe a versão utilizada como referência no projeto:
 
 [Fakturama 2.2.0 — Windows x64 com JRE](https://files.fakturama.info/release/v2.2.0/Installer_Fakturama_windows-x64_2.2.0_with_jre.msi)
 
-Durante a instalação, utilize o idioma **Inglês (Englisch)**.
+*IMPORTANTE:* Durante a instalação, utilize o idioma **Inglês (Englisch)**, na primeira execução quando pedir para selecionar uma pasta de trabalho (Workplace folder), você pode criar uma pasta para isto ou selecionar alguma como seu Documentos.
 
 O projeto espera, por padrão, o executável em:
 
