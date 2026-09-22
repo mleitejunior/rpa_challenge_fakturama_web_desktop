@@ -70,6 +70,12 @@ def scrape_products(page: Page):
     product_elements = page.locator(PRODUCT_SELECTOR)
     product_count = product_elements.count()
 
+    if product_count == 0:
+        raise RuntimeError(
+            "Nenhum produto foi encontrado no catálogo do Sauce Demo. "
+            "Verifique se os seletores da página continuam válidos."
+        )
+
     products = []
 
     for index in range(product_count):
