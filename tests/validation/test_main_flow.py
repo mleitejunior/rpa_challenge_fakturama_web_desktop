@@ -141,6 +141,15 @@ def test_main_success_creates_mandatory_outputs_and_registers_all_items(
         products_data,
     )
 
+    csv_buyer = {**buyer_data, "first_name": "Comprador do CSV"}
+    csv_products = [
+        {**product, "name": f'{product["name"]} - CSV'}
+        for product in products_data
+    ]
+
+    monkeypatch.setattr(app, "load_buyer", lambda path: csv_buyer)
+    monkeypatch.setattr(app, "load_products", lambda path: csv_products)
+
     try:
         app.main()
     finally:
@@ -151,8 +160,8 @@ def test_main_success_creates_mandatory_outputs_and_registers_all_items(
     assert browser.closed is True
     assert calls["open"] == 1
     assert calls["close"] == 1
-    assert calls["customer"] == [buyer_data]
-    assert calls["products"] == products_data
+    assert calls["customer"] == [csv_buyer]
+    assert calls["products"] == csv_products
 
     assert load_buyer(run_dir / "buyer.csv") == buyer_data
     assert load_products(run_dir / "products.csv") == products_data

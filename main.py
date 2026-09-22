@@ -15,7 +15,12 @@ from src.desktop.fakturama import (
     register_customer,
     register_product,
 )
-from src.repositories.csv_repository import save_buyer, save_products
+from src.repositories.csv_repository import (
+    load_buyer,
+    load_products,
+    save_buyer,
+    save_products,
+)
 from src.web.buyer_scraper import scrape_buyer
 from src.web.sauce_demo import scrape_products
 
@@ -79,6 +84,11 @@ def main():
             "Catálogo de produtos persistido em: %s",
             execution.products_csv,
         )
+
+        # Os CSVs são a ponte de dados entre a etapa web e a etapa desktop.
+        buyer = load_buyer(execution.buyer_csv)
+        products = load_products(execution.products_csv)
+        logger.info("Dados recarregados dos CSVs para a etapa desktop")
 
         logger.info("Abertura do Fakturama iniciada")
         open_fakturama()
