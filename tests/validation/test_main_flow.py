@@ -260,7 +260,11 @@ def test_main_close_failure_marks_execution_as_failed(
     monkeypatch.setattr(app, "close_fakturama", fail_to_close_fakturama)
 
     try:
-        app.main()
+        with pytest.raises(
+            RuntimeError,
+            match="falha simulada ao fechar Fakturama",
+        ):
+            app.main()
     finally:
         _close_execution_logger()
 

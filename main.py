@@ -35,6 +35,7 @@ def main():
     products_registered = 0
     fakturama_opened = False
     success = False
+    close_error = None
 
     logger.info("Execução iniciada")
     logger.info("Ambiente: %s", APP_ENV)
@@ -188,8 +189,9 @@ def main():
             try:
                 close_fakturama()
                 logger.info("Fakturama fechado")
-            except Exception:
+            except Exception as error:
                 success = False
+                close_error = error
                 logger.exception("Falha ao fechar o Fakturama")
 
         logger.info(
@@ -206,6 +208,11 @@ def main():
             logger.info("Execução finalizada com sucesso")
         else:
             logger.error("Execução finalizada com falha")
+
+    # Se o fluxo principal terminou sem erro, mas o fechamento falhou,
+    # propaga a falha para que o processo finalize com exit code != 0.
+    if close_error is not None:
+        raise close_error
 
 
 if __name__ == "__main__":
