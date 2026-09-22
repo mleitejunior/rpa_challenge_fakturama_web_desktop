@@ -227,3 +227,41 @@ def test_main_failure_captures_error_evidence_and_closes_fakturama(
     assert "Execução interrompida por erro" in log_content
     assert "Produtos cadastrados: 1/2" in log_content
     assert "Execução finalizada com falha" in log_content
+
+def test_main_close_failure_marks_execution_as_failed(
+    monkeypatch,
+    tmp_path,
+    buyer_data,
+    products_data,
+):
+    browser, calls = _prepare_main(
+        monkeypatch,
+        tmp_path,
+        buyer_data,
+        products_data,
+    )
+
+    def fail_to_close_fakturama():
+        calls["close"] += 1
+        raise RuntimeError("falha simulada ao fechar Fakturama")
+
+    monkeypatch.setattr(app, "close_fakturama", fail_to_close_fakturama)
+
+    try:
+        app.main()
+    finally:
+        _close_execution_logger()
+
+    run_dir = _latest_run_dir(tmp_path)
+    log_file = run_dir / "execution.log"
+
+    assert browser.closed is True
+    assert calls["open"] == 1
+    assert calls["close"] == 1
+
+    log_content = log_file.read_text(encoding="utf-8")
+
+    assert "Falha ao fechar o Fakturama" in log_content
+    assert "Execução finalizada com falha" in log_content
+    assert "Execução finalizada com sucesso" not in log_content
+

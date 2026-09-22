@@ -201,11 +201,6 @@ def register_product(product: dict):
     _save_and_close_tab()
 
 
-def register_products(products: list[dict]):
-    """Cadastra todos os produtos coletados no Fakturama."""
-    for product in products:
-        register_product(product)
-
 
 def capture_customer_evidence(screenshot_path):
     """Abre a lista de compradores e captura a evidência do cadastro."""

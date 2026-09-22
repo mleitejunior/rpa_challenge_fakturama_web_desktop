@@ -186,6 +186,7 @@ def main():
                 close_fakturama()
                 logger.info("Fakturama fechado")
             except Exception:
+                success = False
                 logger.exception("Falha ao fechar o Fakturama")
 
         logger.info(
