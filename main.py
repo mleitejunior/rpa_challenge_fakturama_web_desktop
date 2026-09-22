@@ -7,6 +7,7 @@ from src.desktop.fakturama import (
     close_fakturama,
     open_fakturama,
     register_customer,
+    register_products,
 )
 from src.repositories.csv_repository import save_buyer, save_products
 from src.web.buyer_scraper import scrape_buyer
@@ -55,6 +56,10 @@ def main():
     try:
         register_customer(buyer)
         print("Cadastro do comprador concluído.")
+
+        print(f"\nCADASTRANDO {len(products)} PRODUTOS...")
+        register_products(products)
+        print("Cadastro dos produtos concluído.")
     finally:
         close_fakturama()
         print("Fakturama fechado.")

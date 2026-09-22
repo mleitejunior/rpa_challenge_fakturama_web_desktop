@@ -18,6 +18,11 @@ NEW_DEBTOR_IMAGE = FAKTURAMA_ASSETS / "new_debtor.png"
 FIRST_NAME_LAST_NAME_IMAGE = FAKTURAMA_ASSETS / "first_name_last_name.png"
 ZIP_CITY_IMAGE = FAKTURAMA_ASSETS / "zip_city.png"
 SAVE_IMAGE = FAKTURAMA_ASSETS / "save.png"
+ITEM_NUMBER_IMAGE = FAKTURAMA_ASSETS / "item_number.png"
+NAME_IMAGE = FAKTURAMA_ASSETS / "name.png"
+DESCRIPTION_IMAGE = FAKTURAMA_ASSETS / "description.png"
+PRICE_GROSS_IMAGE = FAKTURAMA_ASSETS / "price_gross.png"
+STOCK_IMAGE = FAKTURAMA_ASSETS / "stock.png"
 
 # Esperas e timeouts.
 IMAGE_CONFIDENCE = 0.80
@@ -28,6 +33,7 @@ FAKTURAMA_CLOSE_WAIT_SECONDS = 1
 
 # Interação desktop.
 FIELD_CLICK_OFFSET_X = 10
+DEFAULT_PRODUCT_STOCK = "1"
 
 # O copy/paste com pyperclip foi mantido por ser significativamente mais rápido
 # que a digitação caractere a caractere. Como trade-off, o conteúdo atual do
@@ -126,6 +132,54 @@ def register_customer(buyer: dict):
     paste_text(buyer["zip_code"])
 
     _save_and_close_tab()
+
+
+def register_product(product: dict):
+    """Cadastra um único produto no Fakturama."""
+    required_fields = ("item_number", "name", "description", "price")
+    missing_fields = [
+        field
+        for field in required_fields
+        if not str(product.get(field, "")).strip()
+    ]
+
+    if missing_fields:
+        raise ValueError(
+            "Dados obrigatórios do produto ausentes: "
+            + ", ".join(missing_fields)
+        )
+
+    click_image(PRODUCT_IMAGE)
+
+    # A presença do campo Item Number confirma que o formulário está pronto.
+    wait_for_image(ITEM_NUMBER_IMAGE)
+
+    click_right_of_image(ITEM_NUMBER_IMAGE)
+    paste_text(product["item_number"])
+
+    click_right_of_image(NAME_IMAGE)
+    paste_text(product["name"])
+
+    # A imagem de Description inclui o próprio campo, então o clique é central.
+    click_image(DESCRIPTION_IMAGE)
+    paste_text(product["description"])
+
+    # O Fakturama utiliza vírgula como separador decimal.
+    fakturama_price = str(product["price"]).replace(".", ",")
+
+    click_right_of_image(PRICE_GROSS_IMAGE)
+    paste_text(fakturama_price)
+
+    click_right_of_image(STOCK_IMAGE)
+    paste_text(DEFAULT_PRODUCT_STOCK)
+
+    _save_and_close_tab()
+
+
+def register_products(products: list[dict]):
+    """Cadastra todos os produtos coletados no Fakturama."""
+    for product in products:
+        register_product(product)
 
 
 def close_fakturama():
