@@ -1,12 +1,19 @@
+from pathlib import Path
 from pprint import pprint
 
 from playwright.sync_api import sync_playwright
 
+from src.repositories.csv_repository import save_buyer, save_products
 from src.web.buyer_scraper import scrape_buyer
 from src.web.sauce_demo import scrape_products
 
 
 BROWSER_HEADLESS = False
+
+BASE_DIR = Path(__file__).resolve().parent
+RESULTS_DIR = BASE_DIR / "results"
+BUYER_CSV_PATH = RESULTS_DIR / "buyer.csv"
+PRODUCTS_CSV_PATH = RESULTS_DIR / "products.csv"
 
 
 def main():
@@ -29,6 +36,13 @@ def main():
             pprint(product, sort_dicts=False)
 
         browser.close()
+
+    save_buyer(buyer, BUYER_CSV_PATH)
+    save_products(products, PRODUCTS_CSV_PATH)
+
+    print("\nDADOS PERSISTIDOS:")
+    print(f"- {BUYER_CSV_PATH}")
+    print(f"- {PRODUCTS_CSV_PATH}")
 
 
 if __name__ == "__main__":
