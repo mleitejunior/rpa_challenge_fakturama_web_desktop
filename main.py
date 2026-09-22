@@ -13,6 +13,7 @@ from src.desktop.fakturama import (
     open_fakturama,
     register_customer,
     register_product,
+    terminate_existing_fakturama,
 )
 from src.repositories.csv_repository import (
     load_buyer,
@@ -40,6 +41,14 @@ def main():
     logger.info("Pasta de resultados: %s", execution.run_dir)
 
     try:
+        logger.info("Verificação de instância anterior do Fakturama iniciada")
+        fakturama_was_running = terminate_existing_fakturama()
+
+        if fakturama_was_running:
+            logger.info("Instância anterior do Fakturama encerrada")
+        else:
+            logger.info("Nenhuma instância anterior do Fakturama encontrada")
+
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
                 headless=BROWSER_HEADLESS,

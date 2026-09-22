@@ -11,6 +11,7 @@ from src.config.settings import (
     FAKTURAMA_AFTER_SAVE_WAIT_SECONDS,
     FAKTURAMA_CLOSE_WAIT_SECONDS,
     FAKTURAMA_EXE,
+    FAKTURAMA_TERMINATION_TIMEOUT_SECONDS,
     FIELD_CLICK_OFFSET_X,
     FOCUS_AFTER_CLICK_WAIT_SECONDS,
     FOCUS_CLICK_MAX_ATTEMPTS,
@@ -112,6 +113,71 @@ def paste_text(value):
     pyperclip.copy(str(value))
     pyautogui.hotkey("ctrl", "v")
 
+
+
+def terminate_existing_fakturama():
+    """Encerra qualquer instância anterior do Fakturama antes da execução."""
+    process_name = Path(FAKTURAMA_EXE).name
+
+    if not _is_process_running(process_name):
+        return False
+
+    result = subprocess.run(
+        ["taskkill", "/IM", process_name, "/F", "/T"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=FAKTURAMA_TERMINATION_TIMEOUT_SECONDS,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(
+            "Não foi possível encerrar a instância existente do Fakturama. "
+            f"Detalhes: {details or 'taskkill retornou erro sem detalhes.'}"
+        )
+
+    deadline = time.monotonic() + FAKTURAMA_TERMINATION_TIMEOUT_SECONDS
+
+    while time.monotonic() < deadline:
+        if not _is_process_running(process_name):
+            return True
+
+        time.sleep(IMAGE_POLL_INTERVAL_SECONDS)
+
+    raise TimeoutError(
+        "O processo do Fakturama continuou ativo após a tentativa de "
+        f"finalização: {process_name}"
+    )
+
+
+def _is_process_running(process_name):
+    """Verifica pelo tasklist se o processo informado está em execução."""
+    result = subprocess.run(
+        [
+            "tasklist",
+            "/FI",
+            f"IMAGENAME eq {process_name}",
+            "/FO",
+            "CSV",
+            "/NH",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=FAKTURAMA_TERMINATION_TIMEOUT_SECONDS,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(
+            "Não foi possível verificar processos ativos do Fakturama. "
+            f"Detalhes: {details or 'tasklist retornou erro sem detalhes.'}"
+        )
+
+    return process_name.lower() in result.stdout.lower()
 
 def open_fakturama():
     """Abre o Fakturama e aguarda a tela principal ficar disponível."""

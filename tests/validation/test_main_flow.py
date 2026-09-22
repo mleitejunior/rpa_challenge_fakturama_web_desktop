@@ -80,6 +80,7 @@ def _prepare_main(monkeypatch, tmp_path, buyer_data, products_data):
     calls = {
         "customer": [],
         "products": [],
+        "terminate": 0,
         "open": 0,
         "close": 0,
     }
@@ -93,6 +94,10 @@ def _prepare_main(monkeypatch, tmp_path, buyer_data, products_data):
     monkeypatch.setattr(app, "scrape_buyer", lambda page: buyer_data)
     monkeypatch.setattr(app, "scrape_products", lambda page: products_data)
 
+    def fake_terminate_existing_fakturama():
+        calls["terminate"] += 1
+        return False
+
     def fake_open_fakturama():
         calls["open"] += 1
 
@@ -105,6 +110,11 @@ def _prepare_main(monkeypatch, tmp_path, buyer_data, products_data):
     def fake_register_product(product):
         calls["products"].append(product.copy())
 
+    monkeypatch.setattr(
+        app,
+        "terminate_existing_fakturama",
+        fake_terminate_existing_fakturama,
+    )
     monkeypatch.setattr(app, "open_fakturama", fake_open_fakturama)
     monkeypatch.setattr(app, "close_fakturama", fake_close_fakturama)
     monkeypatch.setattr(app, "register_customer", fake_register_customer)
@@ -158,6 +168,7 @@ def test_main_success_creates_mandatory_outputs_and_registers_all_items(
     run_dir = _latest_run_dir(tmp_path)
 
     assert browser.closed is True
+    assert calls["terminate"] == 1
     assert calls["open"] == 1
     assert calls["close"] == 1
     assert calls["customer"] == [csv_buyer]
@@ -216,6 +227,7 @@ def test_main_failure_captures_error_evidence_and_closes_fakturama(
     error_evidence = run_dir / "screenshots" / "error.png"
 
     assert browser.closed is True
+    assert calls["terminate"] == 1
     assert calls["open"] == 1
     assert calls["close"] == 1
     assert calls["customer"] == [buyer_data]
@@ -256,6 +268,7 @@ def test_main_close_failure_marks_execution_as_failed(
     log_file = run_dir / "execution.log"
 
     assert browser.closed is True
+    assert calls["terminate"] == 1
     assert calls["open"] == 1
     assert calls["close"] == 1
 
