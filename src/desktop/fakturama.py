@@ -103,6 +103,7 @@ TOOLBAR_ICON_ANCHORS = {
 # Regras internas da automação desktop.
 DEFAULT_PRODUCT_STOCK = "1"
 NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS = 0.10
+CLIPBOARD_VALIDATION_SENTINEL = "__RPA_CLIPBOARD_NOT_UPDATED__"
 PRICE_DECIMAL_SEPARATORS = (",", ".")
 
 # Compatibilidade do formulário de contato entre máquinas.
@@ -340,11 +341,21 @@ def paste_and_validate_numeric(value, field_name, input_candidates=None):
         pyautogui.hotkey("shift", "tab")
         time.sleep(NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS)
 
-        # Lê o valor já formatado pelo próprio Fakturama.
+        # Lê o valor já formatado pelo próprio Fakturama. A sentinela garante
+        # que um Ctrl+C sem conteúdo não reutilize o valor anterior do clipboard.
         pyautogui.hotkey("ctrl", "a")
+        pyperclip.copy(CLIPBOARD_VALIDATION_SENTINEL)
         pyautogui.hotkey("ctrl", "c")
         time.sleep(NUMERIC_FIELD_CLIPBOARD_WAIT_SECONDS)
         last_read_value = pyperclip.paste().strip()
+
+        if last_read_value == CLIPBOARD_VALIDATION_SENTINEL:
+            LOGGER.warning(
+                "Não foi possível ler o conteúdo do campo %s após inserir %s",
+                field_name,
+                candidate,
+            )
+            continue
 
         try:
             actual_value = _parse_numeric_value(last_read_value)
