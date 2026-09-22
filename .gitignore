@@ -37,3 +37,7 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# Runtime results
+results/*
+!results/.gitkeep

@@ -1,7 +1,7 @@
 # Web automation
 playwright==1.63.0
 
-# Desktop automation (used in the next POC step)
+# Desktop automation
 pyautogui==0.9.54
 opencv-python==5.0.0.93
 pillow==12.3.0

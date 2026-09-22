@@ -66,11 +66,21 @@ https://www.fakenamegenerator.com/gen-random-br-br.php
 
 Ao abrir essa URL, uma identidade brasileira fictícia já é gerada.
 
-Dados obrigatórios:
+Dados coletados e persistidos:
 
 - Nome
 - Sobrenome
+- Rua
+- Número
+- Cidade
+- Estado
 - CEP
+- CPF
+- Telefone
+- Data de nascimento
+
+Para o cadastro desktop atualmente implementado no Fakturama, são utilizados
+nome, sobrenome e CEP.
 
 Exemplo de tela:
 
@@ -189,48 +199,40 @@ A solução evita frameworks adicionais, a menos que tragam valor claro para o d
 rpa_challenge_fakturama/
 ├── README.md
 ├── requirements.txt
+├── pytest.ini
 ├── .gitignore
-│
-├── docs/
-│   ├── desafio_tecnico_rpa_candidato.pdf
-│   ├── solution-design.md
-│   └── images/
-│       ├── fake-name-generator.png
-│       ├── sauce-login.png
-│       ├── sauce-products.png
-│       ├── fakturama-home.png
-│       ├── fakturama-new-contact.png
-│       └── fakturama-new-product.png
+├── main.py
 │
 ├── src/
-│   ├── main.py
-│   ├── config.py
-│   │
-│   ├── models/
-│   │   ├── buyer.py
-│   │   └── product.py
-│   │
 │   ├── web/
 │   │   ├── buyer_scraper.py
 │   │   └── sauce_demo.py
-│   │
 │   ├── desktop/
-│   │   ├── desktop_automation.py
 │   │   └── fakturama.py
-│   │
-│   ├── repositories/
-│   │   └── csv_repository.py
-│   │
-│   └── utils/
-│       └── logger.py
+│   └── repositories/
+│       └── csv_repository.py
 │
 ├── resources/
 │   └── images/
 │       └── fakturama/
 │
+├── spikes/
+│   ├── README.md
+│   └── poc.py
+│
 ├── tests/
+│   ├── conftest.py
+│   ├── test_buyer_parsing.py
+│   ├── test_product_parsing.py
+│   └── test_csv_repository.py
+│
+├── docs/
+│   ├── desafio_tecnico_rpa_candidato.pdf
+│   ├── documento_solucao.md
+│   └── images/
 │
 └── results/
+    └── .gitkeep
 ```
 
 A estrutura poderá ser simplificada durante a implementação caso um desenho menor se mostre suficiente.
@@ -244,13 +246,13 @@ A estrutura poderá ser simplificada durante a implementação caso um desenho m
 Exemplo:
 
 ```csv
-first_name,last_name,zip_code
-Alice,Correia Santos,57311-500
+first_name,last_name,street,number,city,state,zip_code,cpf,phone,birth_date
+Miguel,Pereira Carvalho,Rua Amadeu Natal,1199,Curitiba,PR,82650-440,160.419.191-01,(41) 6375-6640,1941-07-19
 ```
 
-Somente os campos explicitamente exigidos pelo desafio serão persistidos.
-
----
+Os dados adicionais do comprador são persistidos para tornar o handoff entre
+as etapas web e desktop mais completo, mesmo que apenas um subconjunto seja
+necessário no cadastro atual do Fakturama.
 
 ### 7.2 CSV de Produtos
 

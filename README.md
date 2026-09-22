@@ -21,6 +21,36 @@ O enunciado original do desafio também está disponível na pasta `docs`.
 
 [`docs/desafio_tecnico_rpa_candidato.pdf`](docs/desafio_tecnico_rpa_candidato.pdf)
 
+## Estrutura atual
+
+```text
+.
+├── main.py
+├── src/
+│   ├── web/
+│   │   ├── buyer_scraper.py
+│   │   └── sauce_demo.py
+│   ├── repositories/
+│   │   └── csv_repository.py
+│   └── desktop/
+│       └── fakturama.py
+├── resources/
+│   └── images/
+│       └── fakturama/
+├── tests/
+├── spikes/
+│   ├── README.md
+│   └── poc.py
+├── docs/
+└── results/
+```
+
+- `src/`: implementação definitiva da automação.
+- `resources/`: arquivos necessários em tempo de execução, como as âncoras visuais do Fakturama.
+- `spikes/`: provas de conceito preservadas como histórico técnico; não são dependências do código de produção.
+- `docs/`: documentação e imagens explicativas.
+- `results/`: saída gerada em runtime e não versionada, exceto pelo `.gitkeep`.
+
 ## Status
 
 🚧 **Em desenvolvimento**

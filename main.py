@@ -3,6 +3,11 @@ from pprint import pprint
 
 from playwright.sync_api import sync_playwright
 
+from src.desktop.fakturama import (
+    close_fakturama,
+    open_fakturama,
+    register_customer,
+)
 from src.repositories.csv_repository import save_buyer, save_products
 from src.web.buyer_scraper import scrape_buyer
 from src.web.sauce_demo import scrape_products
@@ -43,6 +48,16 @@ def main():
     print("\nDADOS PERSISTIDOS:")
     print(f"- {BUYER_CSV_PATH}")
     print(f"- {PRODUCTS_CSV_PATH}")
+
+    print("\nABRINDO FAKTURAMA...")
+    open_fakturama()
+
+    try:
+        register_customer(buyer)
+        print("Cadastro do comprador concluído.")
+    finally:
+        close_fakturama()
+        print("Fakturama fechado.")
 
 
 if __name__ == "__main__":

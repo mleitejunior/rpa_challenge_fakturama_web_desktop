@@ -19,8 +19,8 @@ SAUCE_PASSWORD = "secret_sauce"
 # Fakturama
 FAKTURAMA_EXE = r"C:\Program Files\Fakturama2\Fakturama.exe"
 
-BASE_DIR = Path(__file__).resolve().parent
-FAKTURAMA_ASSETS = BASE_DIR / "fakturama_assets"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FAKTURAMA_ASSETS = PROJECT_ROOT / "resources" / "images" / "fakturama"
 
 # Imagens usadas como âncoras na automação 'desktop'
 PRODUCT_IMAGE = FAKTURAMA_ASSETS / "product.png"

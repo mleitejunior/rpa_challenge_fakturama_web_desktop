@@ -1,0 +1,141 @@
+import subprocess
+import time
+from pathlib import Path
+
+import pyautogui
+import pyperclip
+
+
+FAKTURAMA_EXE = r"C:\Program Files\Fakturama2\Fakturama.exe"
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FAKTURAMA_ASSETS = PROJECT_ROOT / "resources" / "images" / "fakturama"
+
+# Imagens usadas como âncoras na automação desktop.
+PRODUCT_IMAGE = FAKTURAMA_ASSETS / "product.png"
+CONTACT_IMAGE = FAKTURAMA_ASSETS / "contact.png"
+NEW_DEBTOR_IMAGE = FAKTURAMA_ASSETS / "new_debtor.png"
+FIRST_NAME_LAST_NAME_IMAGE = FAKTURAMA_ASSETS / "first_name_last_name.png"
+ZIP_CITY_IMAGE = FAKTURAMA_ASSETS / "zip_city.png"
+SAVE_IMAGE = FAKTURAMA_ASSETS / "save.png"
+
+# Esperas e timeouts.
+IMAGE_CONFIDENCE = 0.80
+IMAGE_TIMEOUT_SECONDS = 180
+IMAGE_POLL_INTERVAL_SECONDS = 0.5
+FAKTURAMA_AFTER_SAVE_WAIT_SECONDS = 0.5
+FAKTURAMA_CLOSE_WAIT_SECONDS = 1
+
+# Interação desktop.
+FIELD_CLICK_OFFSET_X = 10
+
+# O copy/paste com pyperclip foi mantido por ser significativamente mais rápido
+# que a digitação caractere a caractere. Como trade-off, o conteúdo atual do
+# clipboard do usuário é sobrescrito durante a execução.
+
+
+def wait_for_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
+    """Aguarda uma imagem aparecer na tela e retorna sua região."""
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        try:
+            location = pyautogui.locateOnScreen(
+                str(image_path),
+                confidence=IMAGE_CONFIDENCE,
+            )
+        except pyautogui.ImageNotFoundException:
+            location = None
+
+        if location:
+            return location
+
+        time.sleep(IMAGE_POLL_INTERVAL_SECONDS)
+
+    raise TimeoutError(
+        f"Imagem não encontrada em até {timeout}s: {image_path.name}"
+    )
+
+
+def click_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
+    """Aguarda uma imagem e clica no centro dela."""
+    location = wait_for_image(image_path, timeout=timeout)
+    center = pyautogui.center(location)
+    pyautogui.click(center.x, center.y)
+    return location
+
+
+def click_right_of_image(image_path, offset_x=FIELD_CLICK_OFFSET_X):
+    """Clica à direita de uma imagem usada como âncora de um campo."""
+    location = wait_for_image(image_path)
+
+    x = location.left + location.width + offset_x
+    y = location.top + (location.height // 2)
+
+    pyautogui.click(x, y)
+    return location
+
+
+def paste_text(value):
+    """Copia o valor para o clipboard e cola no campo em foco."""
+    pyperclip.copy(str(value))
+    pyautogui.hotkey("ctrl", "v")
+
+
+def open_fakturama():
+    """Abre o Fakturama e aguarda a tela principal ficar disponível."""
+    executable = Path(FAKTURAMA_EXE)
+
+    if not executable.exists():
+        raise FileNotFoundError(
+            f"Executável do Fakturama não encontrado: {executable}"
+        )
+
+    subprocess.Popen([str(executable)])
+
+    # Product+ é usado como indicador visual de que o aplicativo terminou de abrir.
+    wait_for_image(PRODUCT_IMAGE)
+
+
+def register_customer(buyer: dict):
+    """Cadastra o comprador como um novo contato no Fakturama."""
+    required_fields = ("first_name", "last_name", "zip_code")
+    missing_fields = [
+        field
+        for field in required_fields
+        if not str(buyer.get(field, "")).strip()
+    ]
+
+    if missing_fields:
+        raise ValueError(
+            "Dados obrigatórios do comprador ausentes: "
+            + ", ".join(missing_fields)
+        )
+
+    click_image(CONTACT_IMAGE)
+    wait_for_image(NEW_DEBTOR_IMAGE)
+
+    # O Customer ID é gerado automaticamente pelo Fakturama.
+    click_right_of_image(FIRST_NAME_LAST_NAME_IMAGE)
+    paste_text(buyer["first_name"])
+
+    pyautogui.press("tab")
+    paste_text(buyer["last_name"])
+
+    click_right_of_image(ZIP_CITY_IMAGE)
+    paste_text(buyer["zip_code"])
+
+    _save_and_close_tab()
+
+
+def close_fakturama():
+    """Fecha o Fakturama ao final da execução."""
+    time.sleep(FAKTURAMA_CLOSE_WAIT_SECONDS)
+    pyautogui.hotkey("alt", "f4")
+
+
+def _save_and_close_tab():
+    """Salva o registro atual e fecha a aba aberta no Fakturama."""
+    click_image(SAVE_IMAGE)
+    time.sleep(FAKTURAMA_AFTER_SAVE_WAIT_SECONDS)
+    pyautogui.hotkey("ctrl", "w")
