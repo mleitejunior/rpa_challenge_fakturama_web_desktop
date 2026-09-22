@@ -13,62 +13,167 @@ A automação executa um fluxo ponta a ponta entre aplicações web e desktop:
 
 ## Stack
 
-- Python 3
-- Playwright
-- PyAutoGUI
-- OpenCV
-- Pillow
-- Pyperclip
-- python-dotenv
-- pytest
+- **Python 3** — linguagem principal utilizada para orquestrar todo o fluxo RPA.
+- **Playwright** — automação das etapas web, incluindo navegação, login e coleta dos dados.
+- **PyAutoGUI** — automação da interface desktop do Fakturama por mouse, teclado e screenshots.
+- **OpenCV** — suporte ao reconhecimento das imagens da interface com nível de confiança (`confidence`).
+- **Pillow** — manipulação de screenshots e leitura de pixels, utilizada também na validação visual do foco dos campos.
+- **Pyperclip** — preenchimento rápido dos campos do Fakturama por copiar/colar.
+- **python-dotenv** — carregamento das configurações locais definidas no arquivo `.env`.
+- **pytest** — testes unitários, de integração e cenários de validação.
 
 ## Pré-requisitos
 
-A execução desktop foi desenvolvida para **Windows** e requer:
+A automação desktop foi desenvolvida para **Windows**.
 
-- Python 3 disponível no `PATH`;
-- acesso à internet para Fake Name Generator e Sauce Demo;
-- Fakturama **2.2.0** instalado;
-- Chromium do Playwright instalado;
-- interface do Fakturama compatível com as imagens de referência em `resources/images/fakturama/`.
+### Python 3
 
-O instalador do Fakturama não é versionado no repositório devido ao tamanho. A versão utilizada como referência pode ser obtida diretamente em:
+Baixe o instalador oficial para Windows em:
+
+[Python — Downloads para Windows](https://www.python.org/downloads/windows/)
+
+Durante a instalação, marque a opção:
+
+```text
+Add Python to PATH
+```
+
+Após instalar, abra o PowerShell e confirme:
+
+```powershell
+python --version
+```
+
+### Fakturama 2.2.0
+
+Baixe a versão utilizada como referência no projeto:
 
 [Fakturama 2.2.0 — Windows x64 com JRE](https://files.fakturama.info/release/v2.2.0/Installer_Fakturama_windows-x64_2.2.0_with_jre.msi)
 
-Por padrão, o projeto espera o executável em:
+Durante a instalação, utilize o idioma **Inglês (Englisch)**.
+
+O projeto espera, por padrão, o executável em:
 
 ```text
 C:\Program Files\Fakturama2\Fakturama.exe
 ```
 
-Caso a instalação esteja em outro local, ajuste `FAKTURAMA_EXE` no arquivo `.env`.
+Se o Fakturama for instalado em outro local, altere `FAKTURAMA_EXE` no arquivo `.env` após realizar a configuração descrita neste documento.
+
+### Acesso à internet
+
+É necessário acesso à internet durante a execução para acessar:
+
+- Fake Name Generator;
+- Sauce Demo.
+
+## Observações do ambiente
+
+### Sistema operacional
+
+A automação foi desenvolvida para **Windows**.
+
+Recomendação:
+
+```text
+Windows 11
+```
+
+### Resolução e escala
+
+A automação foi desenvolvida e validada em:
+
+```text
+1920 x 1080
+Escala do Windows: 100%
+```
+
+O uso dessa mesma configuração é recomendado.
+Outras resoluções podem funcionar desde que a escala permaneça em 100% e a interface do Fakturama preserve o mesmo tamanho visual dos elementos. Alterações de escala, zoom ou aparência podem exigir nova validação das imagens de referência.
 
 ## Instalação
 
-No PowerShell, a partir da raiz do projeto:
+Execute os passos abaixo no Windows.
+
+### 1. Obter o projeto
+
+Há duas opções.
+
+**Opção A — Download pelo GitHub**
+
+Na página do repositório:
+
+```text
+Code → Download ZIP
+```
+
+Extraia o arquivo ZIP para uma pasta local e abra o PowerShell dentro dessa pasta.
+
+**Opção B — Git clone** (requer [Git for Windows](https://git-scm.com/download/win) instalado)
+
+Copie a URL do repositório no GitHub e execute:
+
+```powershell
+git clone <URL_DO_REPOSITORIO>
+cd rpa_challenge_fakturama_web_desktop
+```
+
+### 2. Criar e ativar o ambiente virtual
+
+Na raiz do projeto:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+```
 
+Quando estiver ativo, o terminal deverá mostrar algo semelhante a:
+
+```text
+(.venv) PS C:\...\rpa_challenge_fakturama_web_desktop>
+```
+
+> Se o PowerShell bloquear a ativação de scripts, execute `Set-ExecutionPolicy -Scope Process Bypass` e tente ativar novamente. Essa alteração vale somente para a janela atual do PowerShell.
+
+### 3. Instalar as dependências
+
+Com o ambiente virtual ativo:
+
+```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
 
+### 4. Instalar o Chromium do Playwright
+
+Execute:
+
+```powershell
 python -m playwright install chromium
 ```
 
-## Configuração
+Esse comando precisa ser executado apenas no setup da máquina.
 
-O projeto possui valores padrão em `src/config/settings.py`. Para personalizar a execução, copie o arquivo de exemplo:
+### 5. Criar o arquivo de configuração local
+
+Copie o arquivo de exemplo:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-O `.env` é local e não deve ser versionado.
+O projeto está pronto para execução com os valores padrão. 
 
-Principais configurações:
+## Configuração
+
+O projeto utiliza dois níveis simples de configuração:
+
+- `.env`: arquivo local com valores que podem variar entre máquinas ou ambientes;
+- `src/config/settings.py`: responsável por carregar o `.env`, aplicar valores padrão e converter os tipos utilizados pelo código.
+
+O `.env` é criado a partir de `.env.example` e **não deve ser versionado no Git**.
+
+Exemplo das principais configurações:
 
 ```dotenv
 APP_ENV=dev
@@ -76,15 +181,26 @@ BROWSER_HEADLESS=false
 RESULTS_DIR=results
 
 FAKTURAMA_EXE=C:\Program Files\Fakturama2\Fakturama.exe
+FAKTURAMA_TERMINATION_TIMEOUT_SECONDS=10
 
 IMAGE_CONFIDENCE=0.80
 IMAGE_TIMEOUT_SECONDS=180
 SAUCE_PRODUCTS_TIMEOUT_MS=15000
 ```
 
+### Caminho do Fakturama
+
+Se o Fakturama estiver instalado em outro local, altere somente esta linha do `.env`:
+
+```dotenv
+FAKTURAMA_EXE=C:\caminho\para\Fakturama.exe
+```
+
+Não é necessário alterar o código-fonte.
+
 Os demais parâmetros de timeout, polling e validação visual estão documentados no próprio `.env.example`.
 
-`APP_ENV` identifica o ambiente no log. O projeto não mantém perfis separados de `dev`, `staging` e `production`; os valores necessários podem ser sobrescritos pelas variáveis de ambiente.
+`APP_ENV` identifica o ambiente no log. O projeto não mantém perfis separados de `dev`, `staging` e `production`; os valores necessários podem ser sobrescritos por variáveis de ambiente.
 
 ## Execução
 
@@ -94,7 +210,17 @@ Com o ambiente virtual ativo e o Fakturama instalado:
 python main.py
 ```
 
-Durante a execução, não utilize mouse ou teclado sobre o Fakturama, pois a etapa desktop depende do foco da interface.
+Antes de iniciar o fluxo, o RPA verifica se já existe uma instância do Fakturama em execução. Caso exista, ela é encerrada de forma forçada para garantir que a automação comece em um estado conhecido.
+
+> **Importante:** salve qualquer trabalho manual aberto no Fakturama antes de executar o RPA. Uma instância já aberta será encerrada e alterações não salvas poderão ser perdidas.
+
+Durante a etapa desktop:
+
+- não utilize o mouse;
+- não utilize o teclado;
+- não minimize ou mova a janela do Fakturama.
+
+A automação depende do foco e da aparência da interface.
 
 O fluxo cria uma pasta exclusiva por execução:
 
@@ -202,15 +328,15 @@ A suíte contém testes unitários de parsing e CSV, integração entre Playwrig
 A automação desktop utiliza reconhecimento de imagem e offsets relativos às âncoras visuais. Por isso:
 
 - alterações de tema, zoom ou escala de exibição do Windows podem afetar o reconhecimento;
-- recomenda-se manter a escala de exibição estável — preferencialmente 100% — durante a execução;
-- não é necessário assumir uma resolução fixa, mas a interface do Fakturama deve manter proporções compatíveis com os assets;
+- recomenda-se utilizar resolução `1920 x 1080` e escala de exibição de 100%;
+- outras resoluções devem ser validadas antes do uso;
 - o Fakturama deve permanecer disponível e sem interação manual durante a etapa desktop;
 - o preenchimento utiliza clipboard para ganhar velocidade, portanto o conteúdo atual da área de transferência é sobrescrito;
 - repetir a execução cria novos registros no Fakturama.
 
 Antes de inserir texto em um campo, a automação valida visualmente se o input recebeu foco pela cor de destaque da interface. Caso o foco não seja confirmado após as tentativas configuradas, a execução é interrompida e o erro é registrado.
 
-## Documentação técnica
+## Outras Documentações
 
 O desenho da solução e as principais decisões técnicas estão em:
 
@@ -219,3 +345,12 @@ O desenho da solução e as principais decisões técnicas estão em:
 O enunciado original do desafio está em:
 
 [`docs/desafio_tecnico_rpa_candidato.pdf`](docs/desafio_tecnico_rpa_candidato.pdf)
+
+## Suporte
+
+Esta solução foi desenvolvida por **mleitejunior**.
+
+Em caso de dúvidas, sugestões ou observações sobre o projeto:
+
+- LinkedIn: `mleitejunior`
+- E-mail: `mleitejunior@gmail.com`
