@@ -30,10 +30,20 @@ IMAGE_TIMEOUT_SECONDS = 180
 IMAGE_POLL_INTERVAL_SECONDS = 0.5
 FAKTURAMA_AFTER_SAVE_WAIT_SECONDS = 0.5
 FAKTURAMA_CLOSE_WAIT_SECONDS = 1
+FOCUS_AFTER_CLICK_WAIT_SECONDS = 0.1
 
 # Interação desktop.
 FIELD_CLICK_OFFSET_X = 10
 DEFAULT_PRODUCT_STOCK = "1"
+
+# Validação visual de foco dos campos.
+# O Fakturama destaca o input ativo com este tom de amarelo.
+FOCUSED_FIELD_COLOR = (250, 240, 162)
+FOCUS_COLOR_TOLERANCE = 12
+FOCUS_SAMPLE_WIDTH = 12
+FOCUS_SAMPLE_HEIGHT = 8
+FOCUS_MIN_MATCH_RATIO = 0.60
+FOCUS_CLICK_MAX_ATTEMPTS = 2
 
 # O copy/paste com pyperclip foi mantido por ser significativamente mais rápido
 # que a digitação caractere a caractere. Como trade-off, o conteúdo atual do
@@ -72,13 +82,22 @@ def click_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
 
 
 def click_right_of_image(image_path, offset_x=FIELD_CLICK_OFFSET_X):
-    """Clica à direita de uma imagem usada como âncora de um campo."""
+    """Clica à direita da âncora e valida se o campo recebeu foco."""
     location = wait_for_image(image_path)
 
     x = location.left + location.width + offset_x
     y = location.top + (location.height // 2)
 
-    pyautogui.click(x, y)
+    _click_and_validate_focus(x, y, image_path.name)
+    return location
+
+
+def click_field_image(image_path, timeout=IMAGE_TIMEOUT_SECONDS):
+    """Clica no centro de uma imagem de campo e valida o foco."""
+    location = wait_for_image(image_path, timeout=timeout)
+    center = pyautogui.center(location)
+
+    _click_and_validate_focus(center.x, center.y, image_path.name)
     return location
 
 
@@ -161,7 +180,7 @@ def register_product(product: dict):
     paste_text(product["name"])
 
     # A imagem de Description inclui o próprio campo, então o clique é central.
-    click_image(DESCRIPTION_IMAGE)
+    click_field_image(DESCRIPTION_IMAGE)
     paste_text(product["description"])
 
     # O Fakturama utiliza vírgula como separador decimal.
@@ -186,6 +205,57 @@ def close_fakturama():
     """Fecha o Fakturama ao final da execução."""
     time.sleep(FAKTURAMA_CLOSE_WAIT_SECONDS)
     pyautogui.hotkey("alt", "f4")
+
+
+def _click_and_validate_focus(x, y, field_name):
+    """Clica no campo e confirma visualmente que ele recebeu foco."""
+    for attempt in range(1, FOCUS_CLICK_MAX_ATTEMPTS + 1):
+        pyautogui.click(x, y)
+        time.sleep(FOCUS_AFTER_CLICK_WAIT_SECONDS)
+
+        if _is_field_focused(x, y):
+            return
+
+    raise RuntimeError(
+        f"Campo não recebeu foco após {FOCUS_CLICK_MAX_ATTEMPTS} "
+        f"tentativas: {field_name}"
+    )
+
+
+def _is_field_focused(x, y):
+    """Verifica se a região clicada possui a cor de foco do Fakturama."""
+    left = max(0, int(x - (FOCUS_SAMPLE_WIDTH // 2)))
+    top = max(0, int(y - (FOCUS_SAMPLE_HEIGHT // 2)))
+
+    screenshot = pyautogui.screenshot(
+        region=(
+            left,
+            top,
+            FOCUS_SAMPLE_WIDTH,
+            FOCUS_SAMPLE_HEIGHT,
+        )
+    ).convert("RGB")
+
+    matching_pixels = 0
+    total_pixels = FOCUS_SAMPLE_WIDTH * FOCUS_SAMPLE_HEIGHT
+
+    for pixel_x in range(FOCUS_SAMPLE_WIDTH):
+        for pixel_y in range(FOCUS_SAMPLE_HEIGHT):
+            pixel = screenshot.getpixel((pixel_x, pixel_y))
+
+            if _is_color_close(pixel, FOCUSED_FIELD_COLOR):
+                matching_pixels += 1
+
+    match_ratio = matching_pixels / total_pixels
+    return match_ratio >= FOCUS_MIN_MATCH_RATIO
+
+
+def _is_color_close(actual_color, expected_color):
+    """Compara duas cores considerando uma pequena tolerância por canal RGB."""
+    return all(
+        abs(actual - expected) <= FOCUS_COLOR_TOLERANCE
+        for actual, expected in zip(actual_color, expected_color)
+    )
 
 
 def _save_and_close_tab():
