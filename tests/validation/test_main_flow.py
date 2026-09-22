@@ -2,17 +2,19 @@ import logging
 import sys
 import types
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 # Este cenário valida a orquestração sem depender de uma sessão gráfica real.
 # O módulo desktop é importado pelo main, então fornecemos um stub de pyautogui
-# antes do import para permitir a execução também em ambientes headless/CI.
+# apenas durante esse import. O patch é revertido imediatamente depois para
+# não contaminar sys.modules nem afetar os demais testes da suíte.
 fake_pyautogui = types.ModuleType("pyautogui")
 fake_pyautogui.ImageNotFoundException = Exception
-sys.modules["pyautogui"] = fake_pyautogui
 
-import main as app
+with mock.patch.dict(sys.modules, {"pyautogui": fake_pyautogui}):
+    import main as app
 from src.repositories.csv_repository import load_buyer, load_products
 
 
