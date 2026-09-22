@@ -60,6 +60,8 @@ C:\Program Files\Fakturama2\Fakturama.exe
 
 Se o Fakturama for instalado em outro local, altere `FAKTURAMA_EXE` no arquivo `.env` após realizar a configuração descrita neste documento.
 
+<mark style="color: red; background: transparent;">Após a instalação, crie uma pasta para armazenar dados do Fakturama e faça uma primeira execução, configura a 'Workspace Folder' que foi pedida para a pasta criada e prossiga até que o aplicativo abra. 
+
 ### Acesso à internet
 
 É necessário acesso à internet durante a execução para acessar:
@@ -173,8 +175,6 @@ O projeto utiliza dois níveis simples de configuração:
 
 O `.env` é criado a partir de `.env.example` e **não deve ser versionado no Git**.
 
-Durante o primeiro cadastro de preço, o RPA identifica automaticamente se o Fakturama daquela máquina aceita melhor `,` ou `.` como separador decimal. A preferência validada é salva em `.runtime_state.json`, também ignorado pelo Git, e passa a ser tentada primeiro nos próximos produtos e nas próximas execuções daquela máquina. Se deixar de funcionar, o outro separador é testado e a preferência é atualizada automaticamente.
-
 Exemplo das principais configurações:
 
 ```dotenv
@@ -206,6 +206,16 @@ Os demais parâmetros de timeout, polling e validação visual estão documentad
 
 ## Execução
 
+Durante a etapa desktop:
+
+<mark style="color: red; background: transparent;">- não utilize o mouse;</mark><br>
+<mark style="color: red; background: transparent;">- não utilize o teclado;</mark><br>
+<mark style="color: red; background: transparent;">- não minimize ou mova a janela do Fakturama.</mark>
+
+
+> **Importante:** salve qualquer trabalho manual aberto no Fakturama antes de executar o RPA. Uma instância já aberta será encerrada e alterações não salvas poderão ser perdidas.
+
+
 Com o ambiente virtual ativo e o Fakturama instalado:
 
 ```powershell
@@ -213,14 +223,6 @@ python main.py
 ```
 
 Antes de iniciar o fluxo, o RPA verifica se já existe uma instância do Fakturama em execução. Caso exista, ela é encerrada de forma forçada para garantir que a automação comece em um estado conhecido.
-
-> **Importante:** salve qualquer trabalho manual aberto no Fakturama antes de executar o RPA. Uma instância já aberta será encerrada e alterações não salvas poderão ser perdidas.
-
-Durante a etapa desktop:
-
-- não utilize o mouse;
-- não utilize o teclado;
-- não minimize ou mova a janela do Fakturama.
 
 A automação depende do foco e da aparência da interface.
 
@@ -324,6 +326,9 @@ A suíte contém testes unitários de parsing e CSV, integração entre Playwrig
 - `resources`: âncoras visuais utilizadas pelo PyAutoGUI.
 - `spikes`: POC preservada como histórico técnico; o código de produção não depende dela.
 - `docs`: enunciado, imagens e documento de solução.
+
+Durante o primeiro cadastro de preço, o RPA identifica automaticamente se o Fakturama daquela máquina aceita melhor `,` ou `.` como separador decimal. A preferência validada é salva em `.runtime_state.json`, também ignorado pelo Git, e passa a ser tentada primeiro nos próximos produtos e nas próximas execuções daquela máquina. Se deixar de funcionar, o outro separador é testado e a preferência é atualizada automaticamente.
+
 
 ## Premissas e limitações
 

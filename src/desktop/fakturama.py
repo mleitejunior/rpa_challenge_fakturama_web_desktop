@@ -204,6 +204,7 @@ def _normalize_anchor_candidates(image_path):
 
     return candidates
 
+
 def _get_anchor_confidence(image_path):
     """Retorna a confiança adequada ao tipo de âncora visual."""
     if image_path in ICON_ANCHORS:
@@ -522,6 +523,7 @@ def _save_preferred_price_decimal_separator(separator):
             temporary_file.unlink(missing_ok=True)
         except OSError:
             pass
+
 
 def _parse_numeric_value(value):
     """Converte valores monetários/decimais em Decimal de forma independente da localidade."""
@@ -1015,7 +1017,6 @@ def register_customer(buyer: dict):
 
     # A aba de novo contato confirma que o formulário terminou de abrir.
     wait_for_image(NEW_DEBTOR_IMAGES)
-    wait_for_image(FIRST_NAME_LAST_NAME_IMAGES)
 
     # O Customer ID é gerado automaticamente pelo Fakturama.
     click_right_of_image(FIRST_NAME_LAST_NAME_IMAGES)
@@ -1148,9 +1149,7 @@ def register_product(product: dict):
     ensure_fakturama_foreground()
     click_image(PRODUCT_IMAGE)
 
-    # A presença do campo Item Number confirma que o formulário está pronto.
-    wait_for_image(ITEM_NUMBER_IMAGES)
-
+    # A própria âncora do Item Number confirma que o formulário está pronto.
     click_right_of_image(ITEM_NUMBER_IMAGES)
     paste_text(product["item_number"])
 
@@ -1176,7 +1175,6 @@ def register_product(product: dict):
     )
 
     _save_and_close_tab()
-
 
 
 def capture_customer_evidence(screenshot_path):
@@ -1275,6 +1273,7 @@ def _click_and_validate_focus(x, y, field_name):
         f"{FOCUS_RETRY_COUNT} novas tentativas de "
         f"{FOCUS_RETRY_OFFSET_X}px à direita: {field_name}"
     )
+
 
 def _is_field_focused(x, y):
     """Verifica se a região clicada possui a cor de foco do Fakturama."""
